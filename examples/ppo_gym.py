@@ -149,8 +149,8 @@ class Experiment():
         for t in range(10000):  # Don't infinite loop while learning
             state_var = tensor(state).unsqueeze(0)
             with torch.no_grad():
-                action = policy_net.select_action(state_var)[0].numpy()
-            action = int(action) if policy_net.is_disc_action else action.astype(np.float64)
+                action = self.agent.policy.select_action(state_var)[0].numpy()
+            action = int(action) if self.agent.policy.is_disc_action else action.astype(np.float64)
             next_state, reward, done, _ = env.step(action)
             reward_episode += reward
             mask = 0 if done else 1
@@ -168,6 +168,18 @@ class Experiment():
         frames = np.array([e['frame'] for e in episode_data])
         clip = ImageSequenceClip(list(frames), fps=30).resize(0.5)
         clip.write_gif('{}/{}-{}.gif'.format(self.logger.logdir, mode, i_episode), fps=30)
+
+    def save(self, i_iter):
+        self.logger.save_csv()
+        self.logger.plot_from_csv(var_pairs=[
+            ('i_iter', 'running_min_reward'), 
+            ('i_iter', 'running_avg_reward'),
+            ('i_iter', 'running_max_reward')])
+
+        to_device(torch.device('cpu'), self.agent.policy, value_net)
+        pickle.dump((self.agent.policy, value_net, running_state),
+                    open(os.path.join(assets_dir(), 'learned_models/{}_ppo.p'.format(args.env_name)), 'wb'))
+        to_device(device, self.agent.policy, value_net)
 
     def main_loop(self):
         for i_iter in range(args.max_iter_num+1):
@@ -197,22 +209,13 @@ class Experiment():
 
             if should_save:
                 print('Save')
-                self.logger.save_csv()
-                self.logger.plot_from_csv(var_pairs=[
-                    ('i_iter', 'running_min_reward'), 
-                    ('i_iter', 'running_avg_reward'),
-                    ('i_iter', 'running_max_reward')])
-
-                to_device(torch.device('cpu'), policy_net, value_net)
-                pickle.dump((policy_net, value_net, running_state),
-                            open(os.path.join(assets_dir(), 'learned_models/{}_ppo.p'.format(args.env_name)), 'wb'))
-                to_device(device, policy_net, value_net)
+                self.save(i_iter)
 
             """clean up gpu memory"""
             torch.cuda.empty_cache()
 
 def build_expname(args):
-    expname = 'debug'
+    expname = 'env-{}'.format(args.env_name)
     return expname
 
 def initialize_logger(logger):
@@ -230,6 +233,11 @@ def main(args):
     initialize_logger(logger)
     
     """create agent"""
+
+
+
+
+
     agent = Agent(env, policy_net, device, running_state=running_state, render=args.render, num_threads=args.num_threads)
     exp = Experiment(agent, env, logger, args)
     exp.main_loop()
