@@ -39,20 +39,20 @@ parser.add_argument('--learning-rate', type=float, default=3e-4, metavar='G',
                     help='learning rate (default: 3e-4)')
 parser.add_argument('--clip-epsilon', type=float, default=0.2, metavar='N',
                     help='clipping epsilon for PPO')
-parser.add_argument('--num-threads', type=int, default=4, metavar='N',
-                    help='number of threads for agent (default: 4)')
+parser.add_argument('--num-threads', type=int, default=1, metavar='N',
+                    help='number of threads for agent (default: 1)')
 parser.add_argument('--seed', type=int, default=1, metavar='N',
                     help='random seed (default: 1)')
 parser.add_argument('--min-batch-size', type=int, default=2048, metavar='N',
                     help='minimal batch size per PPO update (default: 2048)')
-parser.add_argument('--max-iter-num', type=int, default=500, metavar='N',
-                    help='maximal number of main iterations (default: 500)')
+parser.add_argument('--max-iter-num', type=int, default=10000, metavar='N',
+                    help='maximal number of main iterations (default: 10000)')
 parser.add_argument('--log-every', type=int, default=1, metavar='N',
                     help='interval between training status logs (default: 1)')
 parser.add_argument('--save-every', type=int, default=10, metavar='N',
                     help='interval between saving (default: 10)')
-parser.add_argument('--visualize-every', type=int, default=10, metavar='N',
-                    help='interval between visualizing (default: 10)')
+parser.add_argument('--visualize-every', type=int, default=100, metavar='N',
+                    help='interval between visualizing (default: 100)')
 parser.add_argument('--save-model-interval', type=int, default=0, metavar='N',
                     help="interval between saving model (default: 0, means don't save)")
 parser.add_argument('--gpu-index', type=int, default=0, metavar='N')
@@ -72,6 +72,7 @@ torch.set_default_dtype(dtype)
 device = torch.device('cuda', index=args.gpu_index) if torch.cuda.is_available() else torch.device('cpu')
 if torch.cuda.is_available():
     torch.cuda.set_device(args.gpu_index)
+# device = torch.device('cpu')
 
 """environment"""
 env = gym.make(args.env_name)
@@ -143,6 +144,7 @@ class Experiment():
         self.args = args
 
     def sample_trajectory(self, render):
+        to_device(torch.device('cpu'), self.agent.policy)
         episode_data = []
         state = self.env.reset()
         reward_episode = 0
@@ -162,6 +164,7 @@ class Experiment():
             if done:
                 break
             state = next_state
+        to_device(self.agent.device, self.agent.policy)
         return episode_data
 
     def visualize(self, i_episode, episode_data, mode):
