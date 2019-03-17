@@ -14,6 +14,7 @@ from core.ppo import ppo_step
 from core.common import estimate_advantages
 from core.agent import Agent
 
+from moviepy.editor import ImageSequenceClip
 import operator
 
 from infra.log import create_logger
@@ -50,6 +51,8 @@ parser.add_argument('--log-every', type=int, default=1, metavar='N',
                     help='interval between training status logs (default: 1)')
 parser.add_argument('--save-every', type=int, default=10, metavar='N',
                     help='interval between saving (default: 10)')
+parser.add_argument('--visualize-every', type=int, default=10, metavar='N',
+                    help='interval between visualizing (default: 10)')
 parser.add_argument('--save-model-interval', type=int, default=0, metavar='N',
                     help="interval between saving model (default: 0, means don't save)")
 parser.add_argument('--gpu-index', type=int, default=0, metavar='N')
@@ -101,10 +104,6 @@ optimizer_value = torch.optim.Adam(value_net.parameters(), lr=args.learning_rate
 optim_epochs = 10
 optim_batch_size = 64
 
-"""create agent"""
-# agent = Agent(env, policy_net, device, running_state=running_state, render=args.render, num_threads=args.num_threads)
-
-
 def update_params(batch, i_iter):
     states = torch.from_numpy(np.stack(batch.state)).to(dtype).to(device)
     actions = torch.from_numpy(np.stack(batch.action)).to(dtype).to(device)
@@ -143,19 +142,50 @@ class Experiment():
         self.logger = logger
         self.args = args
 
+    def sample_trajectory(self, render):
+        episode_data = []
+        state = self.env.reset()
+        reward_episode = 0
+        for t in range(10000):  # Don't infinite loop while learning
+            state_var = tensor(state).unsqueeze(0)
+            with torch.no_grad():
+                action = policy_net.select_action(state_var)[0].numpy()
+            action = int(action) if policy_net.is_disc_action else action.astype(np.float64)
+            next_state, reward, done, _ = env.step(action)
+            reward_episode += reward
+            mask = 0 if done else 1
+            e = {}
+            if render:
+                frame = self.env.render(mode='rgb_array')
+                e['frame'] = frame
+            episode_data.append(e)
+            if done:
+                break
+            state = next_state
+        return episode_data
+
+    def visualize(self, i_episode, episode_data, mode):
+        frames = np.array([e['frame'] for e in episode_data])
+        clip = ImageSequenceClip(list(frames), fps=30).resize(0.5)
+        clip.write_gif('{}/{}-{}.gif'.format(self.logger.logdir, mode, i_episode), fps=30)
+
     def main_loop(self):
         for i_iter in range(args.max_iter_num+1):
             self.logger.update_variable(name='i_iter', index=i_iter, value=i_iter)
             should_log = i_iter % self.args.log_every == 0
             should_save = i_iter % self.args.save_every == 0
+            should_visualize = i_iter % self.args.visualize_every == 0
 
             """generate multiple trajectories that reach the minimum batch_size"""
             batch, log = self.agent.collect_samples(args.min_batch_size)
 
-
             for metric in ['min_reward', 'avg_reward', 'max_reward']:
                 self.logger.update_variable(
                     name=metric, index=i_iter, value=log[metric], include_running_avg=True)
+
+            if should_visualize:
+                episode_data = self.sample_trajectory(render=True)
+                self.visualize(i_iter, episode_data, mode='train')
 
             t0 = time.time()
             update_params(batch, i_iter)
@@ -198,7 +228,8 @@ def initialize_logger(logger):
 def main(args):
     logger = create_logger(build_expname, args)
     initialize_logger(logger)
-
+    
+    """create agent"""
     agent = Agent(env, policy_net, device, running_state=running_state, render=args.render, num_threads=args.num_threads)
     exp = Experiment(agent, env, logger, args)
     exp.main_loop()
