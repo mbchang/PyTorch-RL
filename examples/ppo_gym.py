@@ -72,7 +72,6 @@ torch.set_default_dtype(dtype)
 device = torch.device('cuda', index=args.gpu_index) if torch.cuda.is_available() else torch.device('cpu')
 if torch.cuda.is_available():
     torch.cuda.set_device(args.gpu_index)
-# device = torch.device('cpu')
 
 """environment"""
 env = gym.make(args.env_name)
@@ -218,7 +217,7 @@ class Experiment():
             torch.cuda.empty_cache()
 
 def build_expname(args):
-    expname = 'env-{}'.format(args.env_name)
+    expname = 'env-{}-debug'.format(args.env_name)
     return expname
 
 def initialize_logger(logger):
@@ -236,11 +235,6 @@ def main(args):
     initialize_logger(logger)
     
     """create agent"""
-
-
-
-
-
     agent = Agent(env, policy_net, device, running_state=running_state, render=args.render, num_threads=args.num_threads)
     exp = Experiment(agent, env, logger, args)
     exp.main_loop()
