@@ -10,14 +10,13 @@ from utils import *
 from models.mlp_policy import Policy
 from models.mlp_critic import Value
 from models.mlp_policy_disc import DiscretePolicy
-from core.ppo import ppo_step
-from core.common import estimate_advantages
 from core.agent import Agent
 
 from moviepy.editor import ImageSequenceClip
 import operator
 
 from infra.log import create_logger
+from core.rl_algs import PPO
 
 
 parser = argparse.ArgumentParser(description='PyTorch PPO example')
@@ -57,13 +56,14 @@ parser.add_argument('--save-model-interval', type=int, default=0, metavar='N',
                     help="interval between saving model (default: 0, means don't save)")
 parser.add_argument('--gpu-index', type=int, default=0, metavar='N')
 
-
-
+parser.add_argument('--maxeplen', type=int, default=10000, metavar='N',
+                    help='maximal number of main iterations (default: 10000)')
 parser.add_argument('--resume', action='store_true',
                     help='resume')
 parser.add_argument('--outputdir', type=str, default='runs',
                     help='outputdir')
-
+parser.add_argument('--debug', action='store_true',
+                    help='debug')
 
 args = parser.parse_args()
 
@@ -73,73 +73,13 @@ device = torch.device('cuda', index=args.gpu_index) if torch.cuda.is_available()
 if torch.cuda.is_available():
     torch.cuda.set_device(args.gpu_index)
 
-"""environment"""
-env = gym.make(args.env_name)
-state_dim = env.observation_space.shape[0]
-is_disc_action = len(env.action_space.shape) == 0
-running_state = ZFilter((state_dim,), clip=5)
-# running_reward = ZFilter((1,), demean=False, clip=10)
-
-"""seeding"""
-np.random.seed(args.seed)
-torch.manual_seed(args.seed)
-env.seed(args.seed)
-
-"""define actor and critic"""
-if args.model_path is None:
-    if is_disc_action:
-        policy_net = DiscretePolicy(state_dim, env.action_space.n)
-    else:
-        policy_net = Policy(state_dim, env.action_space.shape[0], log_std=args.log_std)
-    value_net = Value(state_dim)
-else:
-    policy_net, value_net, running_state = pickle.load(open(args.model_path, "rb"))
-policy_net.to(device)
-value_net.to(device)
-
-optimizer_policy = torch.optim.Adam(policy_net.parameters(), lr=args.learning_rate)
-optimizer_value = torch.optim.Adam(value_net.parameters(), lr=args.learning_rate)
-
-# optimization epoch number and batch size for PPO
-optim_epochs = 10
-optim_batch_size = 64
-
-def update_params(batch, i_iter):
-    states = torch.from_numpy(np.stack(batch.state)).to(dtype).to(device)
-    actions = torch.from_numpy(np.stack(batch.action)).to(dtype).to(device)
-    rewards = torch.from_numpy(np.stack(batch.reward)).to(dtype).to(device)
-    masks = torch.from_numpy(np.stack(batch.mask)).to(dtype).to(device)
-    with torch.no_grad():
-        values = value_net(states)
-        fixed_log_probs = policy_net.get_log_prob(states, actions)
-
-    """get advantage estimation from the trajectories"""
-    advantages, returns = estimate_advantages(rewards, masks, values, args.gamma, args.tau, device)
-
-    """perform mini-batch PPO update"""
-    optim_iter_num = int(math.ceil(states.shape[0] / optim_batch_size))
-    for _ in range(optim_epochs):
-        perm = np.arange(states.shape[0])
-        np.random.shuffle(perm)
-        perm = LongTensor(perm).to(device)
-
-        states, actions, returns, advantages, fixed_log_probs = \
-            states[perm].clone(), actions[perm].clone(), returns[perm].clone(), advantages[perm].clone(), fixed_log_probs[perm].clone()
-
-        for i in range(optim_iter_num):
-            ind = slice(i * optim_batch_size, min((i + 1) * optim_batch_size, states.shape[0]))
-            states_b, actions_b, advantages_b, returns_b, fixed_log_probs_b = \
-                states[ind], actions[ind], advantages[ind], returns[ind], fixed_log_probs[ind]
-
-            ppo_step(policy_net, value_net, optimizer_policy, optimizer_value, 1, states_b, actions_b, returns_b,
-                     advantages_b, fixed_log_probs_b, args.clip_epsilon, args.l2_reg)
-
-
 class Experiment():
-    def __init__(self, agent, env, logger, args):
+    def __init__(self, agent, env, rl_alg, logger, running_state, args):
         self.agent = agent
         self.env = env
+        self.rl_alg = rl_alg
         self.logger = logger
+        self.running_state = running_state
         self.args = args
 
     def sample_trajectory(self, render):
@@ -147,12 +87,12 @@ class Experiment():
         episode_data = []
         state = self.env.reset()
         reward_episode = 0
-        for t in range(10000):  # Don't infinite loop while learning
+        for t in range(self.args.maxeplen):  # Don't infinite loop while learning
             state_var = tensor(state).unsqueeze(0)
             with torch.no_grad():
                 action = self.agent.policy.select_action(state_var)[0].numpy()
             action = int(action) if self.agent.policy.is_disc_action else action.astype(np.float64)
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, _ = self.env.step(action)
             reward_episode += reward
             mask = 0 if done else 1
             e = {}
@@ -178,10 +118,10 @@ class Experiment():
             ('i_iter', 'running_avg_reward'),
             ('i_iter', 'running_max_reward')])
 
-        to_device(torch.device('cpu'), self.agent.policy, value_net)
-        pickle.dump((self.agent.policy, value_net, running_state),
+        to_device(torch.device('cpu'), self.agent.policy, self.agent.valuefn)
+        pickle.dump((self.agent.policy, self.agent.valuefn, self.running_state),
                     open(os.path.join(assets_dir(), 'learned_models/{}_ppo.p'.format(args.env_name)), 'wb'))
-        to_device(device, self.agent.policy, value_net)
+        to_device(device, self.agent.policy, self.agent.valuefn)
 
     def main_loop(self):
         for i_iter in range(args.max_iter_num+1):
@@ -202,7 +142,7 @@ class Experiment():
                 self.visualize(i_iter, episode_data, mode='train')
 
             t0 = time.time()
-            update_params(batch, i_iter)
+            self.rl_alg.update_params(batch, i_iter, self.agent)
             t1 = time.time()
 
             if should_log:
@@ -217,7 +157,7 @@ class Experiment():
             torch.cuda.empty_cache()
 
 def build_expname(args):
-    expname = 'env-{}-debug'.format(args.env_name)
+    expname = 'env-{}-debug-tiny'.format(args.env_name)
     return expname
 
 def initialize_logger(logger):
@@ -230,13 +170,52 @@ def initialize_logger(logger):
     logger.add_metric('running_avg_reward', -np.inf, operator.ge)
     logger.add_metric('running_max_reward', -np.inf, operator.ge)
 
+def process_args(args):
+    if args.debug:
+        args.maxeplen = 100
+        args.max_iter_num = 5
+        args.save_every = 1
+        args.visualize_every = 5
+        args.min_batch_size = 256
+        args.num_threads = 2
+    return args
+
 def main(args):
+    args = process_args(args)
     logger = create_logger(build_expname, args)
     initialize_logger(logger)
-    
+
+    """environment"""
+    env = gym.make(args.env_name)
+    state_dim = env.observation_space.shape[0]
+    is_disc_action = len(env.action_space.shape) == 0
+
+    """seeding"""
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    env.seed(args.seed)
+
+    running_state = ZFilter((state_dim,), clip=5)
+    # running_reward = ZFilter((1,), demean=False, clip=10)
+
+    """define actor and critic"""
+    if args.model_path is None:
+        if is_disc_action:
+            policy_net = DiscretePolicy(state_dim, env.action_space.n)
+        else:
+            policy_net = Policy(state_dim, env.action_space.shape[0], log_std=args.log_std)
+        value_net = Value(state_dim)
+    else:
+        policy_net, value_net, running_state = pickle.load(open(args.model_path, "rb"))
+    policy_net.to(device)
+    value_net.to(device)
+
     """create agent"""
-    agent = Agent(env, policy_net, device, running_state=running_state, render=args.render, num_threads=args.num_threads)
-    exp = Experiment(agent, env, logger, args)
+    agent = Agent(env, policy_net, value_net, device, args, running_state=running_state, render=args.render, num_threads=args.num_threads)
+
+    rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
+
+    exp = Experiment(agent, env, rl_alg, logger, running_state, args)
     exp.main_loop()
 
 if __name__ == '__main__':

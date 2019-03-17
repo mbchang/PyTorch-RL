@@ -4,9 +4,11 @@ from utils.torch import *
 import math
 import time
 
+import torch.optim as optim
+
 
 def collect_samples(pid, queue, env, policy, custom_reward,
-                    mean_action, render, running_state, min_batch_size):
+                    mean_action, render, running_state, min_batch_size, maxeplen):
     torch.randn(pid)
     log = dict()
     memory = Memory()
@@ -25,7 +27,7 @@ def collect_samples(pid, queue, env, policy, custom_reward,
             state = running_state(state)
         reward_episode = 0
 
-        for t in range(10000):
+        for t in range(maxeplen):
             state_var = tensor(state).unsqueeze(0)
             with torch.no_grad():
                 if mean_action:
@@ -99,16 +101,25 @@ def merge_log(log_list):
 
 class Agent:
 
-    def __init__(self, env, policy, device, custom_reward=None,
+    def __init__(self, env, policy, valuefn, device, args, custom_reward=None,
                  mean_action=False, render=False, running_state=None, num_threads=1):
         self.env = env
         self.policy = policy
+        self.valuefn = valuefn
         self.device = device
         self.custom_reward = custom_reward
         self.mean_action = mean_action
         self.running_state = running_state
         self.render = render
         self.num_threads = num_threads
+
+        self.args = args
+        self.initialize_optimizer(args)
+
+    def initialize_optimizer(self, args):
+        self.policy_optimizer = optim.Adam(self.policy.parameters(), lr=self.args.learning_rate)
+        self.value_optimizer = optim.Adam(self.valuefn.parameters(), lr=self.args.learning_rate)
+        self.optimizer = {'policy_opt': self.policy_optimizer, 'value_opt': self.value_optimizer}
 
     def collect_samples(self, min_batch_size):
         t_start = time.time()
@@ -119,13 +130,13 @@ class Agent:
 
         for i in range(self.num_threads-1):
             worker_args = (i+1, queue, self.env, self.policy, self.custom_reward, self.mean_action,
-                           False, self.running_state, thread_batch_size)
+                           False, self.running_state, thread_batch_size, self.args.maxeplen)
             workers.append(multiprocessing.Process(target=collect_samples, args=worker_args))
         for worker in workers:
             worker.start()
 
         memory, log = collect_samples(0, None, self.env, self.policy, self.custom_reward, self.mean_action,
-                                      self.render, self.running_state, thread_batch_size)
+                                      self.render, self.running_state, thread_batch_size, self.args.maxeplen)
 
         worker_logs = [None] * len(workers)
         worker_memories = [None] * len(workers)
