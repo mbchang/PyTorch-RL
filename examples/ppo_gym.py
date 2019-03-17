@@ -14,6 +14,10 @@ from core.ppo import ppo_step
 from core.common import estimate_advantages
 from core.agent import Agent
 
+import operator
+
+from infra.log import create_logger
+
 
 parser = argparse.ArgumentParser(description='PyTorch PPO example')
 parser.add_argument('--env-name', default="Hopper-v2", metavar='G',
@@ -42,11 +46,22 @@ parser.add_argument('--min-batch-size', type=int, default=2048, metavar='N',
                     help='minimal batch size per PPO update (default: 2048)')
 parser.add_argument('--max-iter-num', type=int, default=500, metavar='N',
                     help='maximal number of main iterations (default: 500)')
-parser.add_argument('--log-interval', type=int, default=1, metavar='N',
-                    help='interval between training status logs (default: 10)')
+parser.add_argument('--log-every', type=int, default=1, metavar='N',
+                    help='interval between training status logs (default: 1)')
+parser.add_argument('--save-every', type=int, default=10, metavar='N',
+                    help='interval between saving (default: 10)')
 parser.add_argument('--save-model-interval', type=int, default=0, metavar='N',
                     help="interval between saving model (default: 0, means don't save)")
 parser.add_argument('--gpu-index', type=int, default=0, metavar='N')
+
+
+
+parser.add_argument('--resume', action='store_true',
+                    help='resume')
+parser.add_argument('--outputdir', type=str, default='runs',
+                    help='outputdir')
+
+
 args = parser.parse_args()
 
 dtype = torch.float64
@@ -87,7 +102,7 @@ optim_epochs = 10
 optim_batch_size = 64
 
 """create agent"""
-agent = Agent(env, policy_net, device, running_state=running_state, render=args.render, num_threads=args.num_threads)
+# agent = Agent(env, policy_net, device, running_state=running_state, render=args.render, num_threads=args.num_threads)
 
 
 def update_params(batch, i_iter):
@@ -121,26 +136,76 @@ def update_params(batch, i_iter):
                      advantages_b, fixed_log_probs_b, args.clip_epsilon, args.l2_reg)
 
 
-def main_loop():
-    for i_iter in range(args.max_iter_num):
-        """generate multiple trajectories that reach the minimum batch_size"""
-        batch, log = agent.collect_samples(args.min_batch_size)
-        t0 = time.time()
-        update_params(batch, i_iter)
-        t1 = time.time()
+class Experiment():
+    def __init__(self, agent, env, logger, args):
+        self.agent = agent
+        self.env = env
+        self.logger = logger
+        self.args = args
 
-        if i_iter % args.log_interval == 0:
-            print('{}\tT_sample {:.4f}\tT_update {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
-                i_iter, log['sample_time'], t1-t0, log['min_reward'], log['max_reward'], log['avg_reward']))
+    def main_loop(self):
+        for i_iter in range(args.max_iter_num+1):
+            self.logger.update_variable(name='i_iter', index=i_iter, value=i_iter)
+            should_log = i_iter % self.args.log_every == 0
+            should_save = i_iter % self.args.save_every == 0
 
-        if args.save_model_interval > 0 and (i_iter+1) % args.save_model_interval == 0:
-            to_device(torch.device('cpu'), policy_net, value_net)
-            pickle.dump((policy_net, value_net, running_state),
-                        open(os.path.join(assets_dir(), 'learned_models/{}_ppo.p'.format(args.env_name)), 'wb'))
-            to_device(device, policy_net, value_net)
-
-        """clean up gpu memory"""
-        torch.cuda.empty_cache()
+            """generate multiple trajectories that reach the minimum batch_size"""
+            batch, log = self.agent.collect_samples(args.min_batch_size)
 
 
-main_loop()
+            for metric in ['min_reward', 'avg_reward', 'max_reward']:
+                self.logger.update_variable(
+                    name=metric, index=i_iter, value=log[metric], include_running_avg=True)
+
+            t0 = time.time()
+            update_params(batch, i_iter)
+            t1 = time.time()
+
+            if should_log:
+                print('{}\tT_sample {:.4f}\tT_update {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
+                    i_iter, log['sample_time'], t1-t0, log['min_reward'], log['max_reward'], log['avg_reward']))
+
+            if should_save:
+                print('Save')
+                self.logger.save_csv()
+                self.logger.plot_from_csv(var_pairs=[
+                    ('i_iter', 'running_min_reward'), 
+                    ('i_iter', 'running_avg_reward'),
+                    ('i_iter', 'running_max_reward')])
+
+                to_device(torch.device('cpu'), policy_net, value_net)
+                pickle.dump((policy_net, value_net, running_state),
+                            open(os.path.join(assets_dir(), 'learned_models/{}_ppo.p'.format(args.env_name)), 'wb'))
+                to_device(device, policy_net, value_net)
+
+            """clean up gpu memory"""
+            torch.cuda.empty_cache()
+
+def build_expname(args):
+    expname = 'debug'
+    return expname
+
+def initialize_logger(logger):
+    logger.add_variable('i_iter')
+    logger.add_variable('min_reward', include_running_avg=True)
+    logger.add_variable('avg_reward', include_running_avg=True)
+    logger.add_variable('max_reward', include_running_avg=True)
+    # only works if include_running_avg for 'return'!
+    logger.add_metric('running_min_reward', -np.inf, operator.ge)
+    logger.add_metric('running_avg_reward', -np.inf, operator.ge)
+    logger.add_metric('running_max_reward', -np.inf, operator.ge)
+
+def main(args):
+    logger = create_logger(build_expname, args)
+    initialize_logger(logger)
+
+    agent = Agent(env, policy_net, device, running_state=running_state, render=args.render, num_threads=args.num_threads)
+    exp = Experiment(agent, env, logger, args)
+    exp.main_loop()
+
+if __name__ == '__main__':
+    main(args)
+
+
+
+
