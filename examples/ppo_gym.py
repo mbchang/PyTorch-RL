@@ -83,6 +83,7 @@ if torch.cuda.is_available():
     os.system('export OMP_NUM_THREADS=1')
 
 def merge_log(log_list):
+    """ This is domain specific """
     log = dict()
     metrics = [
         'reward_forward', 
