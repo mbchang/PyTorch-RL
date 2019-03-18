@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import pickle
+import pprint
 import shutil
 import torch
 
@@ -226,6 +227,20 @@ class Logger(object):
             print(string, file=f)
         else:
             print(string)
+
+    def pprintf(self, string):
+        if self.params.printf:
+            f = open(self.logdir+'.txt', 'a')
+            pprint.pprint(string, stream=f)
+
+            # with open(self.logdir+'.txt', 'a') as f:
+            #     f.write(pprint.pformat(vars(pprint)))
+#             with open()
+# >>> with open("file_out.txt", "w") as fout:
+# ...     fout.write(pprint.pformat(vars(pprint)))
+
+        else:
+            pprint.pprint(string)
 
     def clear_data(self):
         for key in self.data:

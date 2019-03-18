@@ -13,7 +13,9 @@ from models.mlp_policy_disc import DiscretePolicy
 from core.agent import Agent
 
 from moviepy.editor import ImageSequenceClip
+import copy
 import operator
+
 
 from infra.log import create_logger
 from core.rl_algs import PPO
@@ -52,8 +54,8 @@ parser.add_argument('--log-every', type=int, default=1, metavar='N',
                     help='interval between training status logs (default: 1)')
 parser.add_argument('--save-every', type=int, default=10, metavar='N',
                     help='interval between saving (default: 10)')
-parser.add_argument('--visualize-every', type=int, default=100, metavar='N',
-                    help='interval between visualizing (default: 100)')
+parser.add_argument('--visualize-every', type=int, default=500, metavar='N',
+                    help='interval between visualizing (default: 500)')
 parser.add_argument('--save-model-interval', type=int, default=0, metavar='N',
                     help="interval between saving model (default: 0, means don't save)")
 parser.add_argument('--gpu-index', type=int, default=0, metavar='N')
@@ -80,6 +82,25 @@ if torch.cuda.is_available():
     torch.cuda.set_device(args.gpu_index)
     os.system('export OMP_NUM_THREADS=1')
 
+def merge_log(log_list):
+    log = dict()
+    metrics = [
+        'reward_forward', 
+        'reward_ctrl', 
+        'reward_contact', 
+        'reward_survive', 
+        'x_position', 
+        'y_position', 
+        'distance_from_origin',
+        'x_velocity',
+        'y_velocity']
+    aggregators = {'total': np.sum, 'avg': np.mean, 'max': np.max, 'min': np.min, 'std': np.std}
+    for m in metrics:
+        metric_data = [x[m] for x in log_list]
+        for a in aggregators:
+            log['{}_{}'.format(a, m)] = aggregators[a](metric_data)
+    return log
+
 class Experiment():
     def __init__(self, agent, env, rl_alg, logger, running_state, args):
         self.agent = agent
@@ -99,10 +120,10 @@ class Experiment():
             with torch.no_grad():
                 action = self.agent.policy.select_action(state_var)[0].numpy()
             action = int(action) if self.agent.policy.is_disc_action else action.astype(np.float64)
-            next_state, reward, done, _ = self.env.step(action)
+            next_state, reward, done, info = self.env.step(action)
             reward_episode += reward
             mask = 0 if done else 1
-            e = {}
+            e = copy.deepcopy(info)
             if render:
                 frame = self.env.render(mode='rgb_array')
                 e['frame'] = frame
@@ -111,6 +132,8 @@ class Experiment():
                 break
             state = next_state
         to_device(self.agent.device, self.agent.policy)
+        merged_episode_data = merge_log(episode_data)
+        self.logger.pprintf(merged_episode_data)
         return episode_data
 
     def visualize(self, i_episode, episode_data, mode):
@@ -172,6 +195,8 @@ def build_expname(args):
     expname += '_opt-{}'.format(args.opt)
     expname += '_plr-{}'.format(args.plr)
     expname += '_clr-{}'.format(args.clr)
+    expname += '_eplen-{}'.format(args.maxeplen)
+    if args.debug: expname+= '_debug'
     return expname
 
 def initialize_logger(logger):
