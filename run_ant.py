@@ -14,15 +14,47 @@ Before with eplen of 10000, since the episode was so long, it took an extremely 
 By using eplen of 200, it saturates the survival reward at 200, after which in order to get larger reward it has to start moving forward.
 So what is likely a better strategy is to train for 200 but test on 10000.
 """
+# optimizer = ['sgd', 'adam']
+# plr = [5e-5]
+# clr = [5e-4, 5e-5]
+# envs = ['Ant-v3']
+# eplen = [200, 1000]
+
+# outputdir = 'runs/ant_test_optimizer_lr_eplen'
+
+# gpu = True
+# num_gpus = 2
+# i = 0
+
+# if gpu:
+#     os.system('export OMP_NUM_THREADS=1')
+
+# for o, p, c, e, l in itertools.product(optimizer, plr, clr, envs, eplen):
+#     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+#     command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {}'.format(o, p, c, e, l)
+#     command += ' --outputdir {}'.format(outputdir)
+#     command += ' --printf'
+#     command += ' &'
+#     print(prefix + command)
+#     os.system(prefix + command)
+#     i += 1
+#     if i >= num_gpus:
+#         i = 0
+
+
+"""
+3/18/19
+Take best of test run.
+"""
 optimizer = ['sgd', 'adam']
 plr = [5e-5]
 clr = [5e-4, 5e-5]
 envs = ['Ant-v3']
-eplen = [200, 1000]
+eplen = [200]
 
-outputdir = 'runs/ant_test_optimizer_lr_eplen'
+outputdir = 'runs/ant_test_optimizer_lr_eplen_testbest'
 
-gpu = True
+gpu = False
 num_gpus = 2
 i = 0
 
@@ -36,7 +68,7 @@ for o, p, c, e, l in itertools.product(optimizer, plr, clr, envs, eplen):
     command += ' --printf'
     command += ' &'
     print(prefix + command)
-    os.system(prefix + command)
+    # os.system(prefix + command)
     i += 1
     if i >= num_gpus:
         i = 0
