@@ -34,16 +34,18 @@ parser.add_argument('--tau', type=float, default=0.95, metavar='G',
                     help='gae (default: 0.95)')
 parser.add_argument('--l2-reg', type=float, default=1e-3, metavar='G',
                     help='l2 regularization regression (default: 1e-3)')
-parser.add_argument('--learning-rate', type=float, default=3e-4, metavar='G',
-                    help='learning rate (default: 3e-4)')
+parser.add_argument('--plr', type=float, default=4e-5, metavar='G',
+                    help='policy learning rate (default: 4e-5)')
+parser.add_argument('--clr', type=float, default=5e-3, metavar='G',
+                    help='critic learning rate (default: 5e-3)')
 parser.add_argument('--clip-epsilon', type=float, default=0.2, metavar='N',
                     help='clipping epsilon for PPO')
-parser.add_argument('--num-threads', type=int, default=1, metavar='N',
-                    help='number of threads for agent (default: 1)')
+parser.add_argument('--num-threads', type=int, default=2, metavar='N',
+                    help='number of threads for agent (default: 2)')
 parser.add_argument('--seed', type=int, default=1, metavar='N',
                     help='random seed (default: 1)')
-parser.add_argument('--min-batch-size', type=int, default=2048, metavar='N',
-                    help='minimal batch size per PPO update (default: 2048)')
+parser.add_argument('--min-batch-size', type=int, default=4096, metavar='N',
+                    help='minimal batch size per PPO update (default: 4096)')
 parser.add_argument('--max-iter-num', type=int, default=10000, metavar='N',
                     help='maximal number of main iterations (default: 10000)')
 parser.add_argument('--log-every', type=int, default=1, metavar='N',
@@ -62,8 +64,12 @@ parser.add_argument('--resume', action='store_true',
                     help='resume')
 parser.add_argument('--outputdir', type=str, default='runs',
                     help='outputdir')
+parser.add_argument('--opt', type=str, default='sgd',
+                    help='adam | sgd')
 parser.add_argument('--debug', action='store_true',
                     help='debug')
+parser.add_argument('--printf', action='store_true',
+                    help='printf')
 
 args = parser.parse_args()
 
@@ -72,6 +78,7 @@ torch.set_default_dtype(dtype)
 device = torch.device('cuda', index=args.gpu_index) if torch.cuda.is_available() else torch.device('cpu')
 if torch.cuda.is_available():
     torch.cuda.set_device(args.gpu_index)
+    os.system('export OMP_NUM_THREADS=1')
 
 class Experiment():
     def __init__(self, agent, env, rl_alg, logger, running_state, args):
@@ -112,11 +119,16 @@ class Experiment():
         clip.write_gif('{}/{}-{}.gif'.format(self.logger.logdir, mode, i_episode), fps=30)
 
     def save(self, i_iter):
+        self.logger.printf('Saving to {}'.format(self.logger.logdir))
         self.logger.save_csv()
         self.logger.plot_from_csv(var_pairs=[
             ('i_iter', 'running_min_reward'), 
             ('i_iter', 'running_avg_reward'),
-            ('i_iter', 'running_max_reward')])
+            ('i_iter', 'running_max_reward'),
+            ('i_iter', 'min_reward'), 
+            ('i_iter', 'avg_reward'),
+            ('i_iter', 'max_reward'),
+            ])
 
         to_device(torch.device('cpu'), self.agent.policy, self.agent.valuefn)
         pickle.dump((self.agent.policy, self.agent.valuefn, self.running_state),
@@ -146,18 +158,20 @@ class Experiment():
             t1 = time.time()
 
             if should_log:
-                print('{}\tT_sample {:.4f}\tT_update {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
+                self.logger.printf('{}\tT_sample {:.4f}\tT_update {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
                     i_iter, log['sample_time'], t1-t0, log['min_reward'], log['max_reward'], log['avg_reward']))
 
             if should_save:
-                print('Save')
                 self.save(i_iter)
 
             """clean up gpu memory"""
             torch.cuda.empty_cache()
 
 def build_expname(args):
-    expname = 'env-{}-debug-tiny'.format(args.env_name)
+    expname = 'env-{}'.format(args.env_name)
+    expname += '_opt-{}'.format(args.opt)
+    expname += '_plr-{}'.format(args.plr)
+    expname += '_clr-{}'.format(args.clr)
     return expname
 
 def initialize_logger(logger):

@@ -117,8 +117,14 @@ class Agent:
         self.initialize_optimizer(args)
 
     def initialize_optimizer(self, args):
-        self.policy_optimizer = optim.Adam(self.policy.parameters(), lr=self.args.learning_rate)
-        self.value_optimizer = optim.Adam(self.valuefn.parameters(), lr=self.args.learning_rate)
+        if args.opt == 'adam':
+            self.policy_optimizer = optim.Adam(self.policy.parameters(), lr=self.args.plr)
+            self.value_optimizer = optim.Adam(self.valuefn.parameters(), lr=self.args.clr)
+        elif args.opt == 'sgd':
+            self.policy_optimizer = optim.SGD(self.policy.parameters(), lr=self.args.plr, momentum=0.9)
+            self.value_optimizer = optim.SGD(self.valuefn.parameters(), lr=self.args.clr, momentum=0.9)
+        else:
+            assert False
         self.optimizer = {'policy_opt': self.policy_optimizer, 'value_opt': self.value_optimizer}
 
     def collect_samples(self, min_batch_size):

@@ -6,7 +6,7 @@ from core.common import estimate_advantages
 from utils import *
 
 class PPO():
-    def __init__(self, agent, dtype, device, args, optim_epochs=10, optim_batch_size=64):
+    def __init__(self, agent, dtype, device, args, optim_epochs=10, optim_batch_size=256):
         self.agent = agent
 
         self.dtype = dtype
