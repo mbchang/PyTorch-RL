@@ -64,8 +64,8 @@ parser.add_argument('--maxeplen', type=int, default=10000, metavar='N',
                     help='maximal number of main iterations (default: 10000)')
 parser.add_argument('--num-test', type=int, default=100,
                     help='number of test trajectories (default: 100)')
-parser.add_argument('--resume', action='store_true',
-                    help='resume')
+parser.add_argument('--resume', type=str, default='',
+                    help='.tar path of saved model')
 parser.add_argument('--outputdir', type=str, default='runs',
                     help='outputdir')
 parser.add_argument('--opt', type=str, default='sgd',
@@ -155,17 +155,26 @@ class Experiment():
         clip.write_gif('{}/{}-{}.gif'.format(self.logger.logdir, mode, i_episode), fps=30)
 
     def save(self, i_iter):
+        metric_keys = [
+            'running_min_reward', 
+            'running_avg_reward',
+            'running_max_reward',
+            'min_reward', 
+            'avg_reward',
+            'max_reward',
+            ]
         self.logger.printf('Saving to {}'.format(self.logger.logdir))
-        self.logger.save_csv()
-        self.logger.plot_from_csv(var_pairs=[
-            ('i_iter', 'running_min_reward'), 
-            ('i_iter', 'running_avg_reward'),
-            ('i_iter', 'running_max_reward'),
-            ('i_iter', 'min_reward'), 
-            ('i_iter', 'avg_reward'),
-            ('i_iter', 'max_reward'),
-            ])
-
+        self.logger.save_csv(clear_data=False)
+        self.logger.plot_from_csv(var_pairs=[('i_iter', k) for k in metric_keys])
+        ckpt = {
+            # or you should probably actually just save the whole thing
+            'policy': self.logger.to_cpu(self.agent.policy.state_dict()),
+            'valuefn': self.logger.to_cpu(self.agent.valuefn.state_dict()),
+            'i_iter': i_iter,
+            'running_state': self.running_state
+        }
+        self.logger.save_checkpoint(ckpt_data=ckpt, current_metric_keys=metric_keys, i_iter=i_iter, ext='_train')
+        self.logger.clear_data() # to save memory
         to_device(torch.device('cpu'), self.agent.policy, self.agent.valuefn)
         pickle.dump((self.agent.policy, self.agent.valuefn, self.running_state),
                     open(os.path.join(assets_dir(), 'learned_models/{}_ppo.p'.format(args.env_name)), 'wb'))
@@ -225,6 +234,9 @@ def initialize_logger(logger):
     logger.add_metric('running_min_reward', -np.inf, operator.ge)
     logger.add_metric('running_avg_reward', -np.inf, operator.ge)
     logger.add_metric('running_max_reward', -np.inf, operator.ge)
+    # logger.add_metric('min_reward', -np.inf, operator.ge)
+    # logger.add_metric('avg_reward', -np.inf, operator.ge)
+    # logger.add_metric('max_reward', -np.inf, operator.ge)
 
 def process_args(args):
     if args.debug:
@@ -268,8 +280,16 @@ def main(args):
         else:
             policy_net = Policy(state_dim, env.action_space.shape[0], log_std=args.log_std)
         value_net = Value(state_dim)
-    else:
+    ######################################################
+    # TODO verify that this works
+    if args.resume:
         policy_net, value_net, running_state = pickle.load(open(args.model_path, "rb"))
+        # TODO: load from checkpoint
+        ckpt = torch.load(args.resume)
+        policy_net.load_state_dict(ckpt['policy'])
+        value_net.load_state_dict(ckpt['valuefn'])
+        running_state = ckpt['running_state']
+    #######################################################
     policy_net.to(device)
     value_net.to(device)
 

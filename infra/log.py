@@ -145,7 +145,7 @@ class Logger(object):
     def add_metric(self, name, initial_val, comparator):
         self.metrics[name] = {'value': initial_val, 'cmp': comparator}
 
-    def save_checkpoint(self, ckpt_data, current_metric_keys, i_episode, ext):
+    def save_checkpoint(self, ckpt_data, current_metric_keys, i_iter, ext):
         current_metrics = {cm_key: self.get_recent_variable_value(cm_key) for cm_key in current_metric_keys}
         old_ckpts = [x for x in os.listdir(self.logdir) if '.pth.tar' in x and 'best' in x and ext in x]
         assert len(old_ckpts) <= len(current_metrics)
@@ -159,8 +159,8 @@ class Logger(object):
                     old_ckpt_to_remove = os.path.join(self.logdir,old_ckpts_with_metric[0])
                     os.remove(old_ckpt_to_remove)
                     self.printf('Removing {}'.format(old_ckpt_to_remove))
-                torch.save(ckpt_data, os.path.join(self.logdir, '{}_ep{:.0e}_best{}{}.pth.tar'.format(
-                    self.expname, i_episode, m, ext)))
+                torch.save(ckpt_data, os.path.join(self.logdir, '{}_iter{:.0e}_best{}{}.pth.tar'.format(
+                    self.expname, i_iter, m, ext)))
                 self.printf('Saved Checkpoint for best {}'.format(m))
             else:
                 self.printf('Did not save {} checkpoint at because {} was worse than the best'.format(m, m))
@@ -181,7 +181,7 @@ class Logger(object):
             cpu_dict[k] = v.cpu()
         return cpu_dict
 
-    def save_csv(self):
+    def save_csv(self, clear_data=False):
         name = self.expname
         csv_dict = defaultdict(dict)
         for key, value in self.data.items():
@@ -195,7 +195,7 @@ class Logger(object):
                 writer.writeheader()
             for i in sorted(csv_dict.keys()):
                 writer.writerow(csv_dict[i])
-        self.clear_data()  # to save memory
+        if clear_data: self.clear_data()  # to save memory
 
     def load_csv(self):
         filename = os.path.join(self.logdir,'{}.csv'.format(self.expname))
@@ -232,13 +232,6 @@ class Logger(object):
         if self.params.printf:
             f = open(self.logdir+'.txt', 'a')
             pprint.pprint(string, stream=f)
-
-            # with open(self.logdir+'.txt', 'a') as f:
-            #     f.write(pprint.pformat(vars(pprint)))
-#             with open()
-# >>> with open("file_out.txt", "w") as fout:
-# ...     fout.write(pprint.pformat(vars(pprint)))
-
         else:
             pprint.pprint(string)
 
