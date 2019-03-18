@@ -42,8 +42,8 @@ parser.add_argument('--clr', type=float, default=5e-3, metavar='G',
                     help='critic learning rate (default: 5e-3)')
 parser.add_argument('--clip-epsilon', type=float, default=0.2, metavar='N',
                     help='clipping epsilon for PPO')
-parser.add_argument('--num-threads', type=int, default=2, metavar='N',
-                    help='number of threads for agent (default: 2)')
+parser.add_argument('--num-threads', type=int, default=1, metavar='N',
+                    help='number of threads for agent (default: 1)')
 parser.add_argument('--seed', type=int, default=1, metavar='N',
                     help='random seed (default: 1)')
 parser.add_argument('--min-batch-size', type=int, default=4096, metavar='N',
@@ -62,6 +62,8 @@ parser.add_argument('--gpu-index', type=int, default=0, metavar='N')
 
 parser.add_argument('--maxeplen', type=int, default=10000, metavar='N',
                     help='maximal number of main iterations (default: 10000)')
+parser.add_argument('--num-test', type=int, default=100,
+                    help='number of test trajectories (default: 100)')
 parser.add_argument('--resume', action='store_true',
                     help='resume')
 parser.add_argument('--outputdir', type=str, default='runs',
@@ -94,7 +96,8 @@ def merge_log(log_list):
         'y_position', 
         'distance_from_origin',
         'x_velocity',
-        'y_velocity']
+        'y_velocity',
+        'reward_total']
     aggregators = {'total': np.sum, 'avg': np.mean, 'max': np.max, 'min': np.min, 'std': np.std}
     for m in metrics:
         metric_data = [x[m] for x in log_list]
@@ -111,9 +114,7 @@ class Experiment():
         self.running_state = running_state
         self.args = args
 
-    def sample_trajectory(self, render):
-        # todo: you should get the best trajectory out of 100 or something.
-        to_device(torch.device('cpu'), self.agent.policy)
+    def sample_single_trajectory(self, render):
         episode_data = []
         state = self.env.reset()
         reward_episode = 0
@@ -126,6 +127,7 @@ class Experiment():
             reward_episode += reward
             mask = 0 if done else 1
             e = copy.deepcopy(info)
+            e.update({'reward_total': reward})
             if render:
                 frame = self.env.render(mode='rgb_array')
                 e['frame'] = frame
@@ -133,10 +135,19 @@ class Experiment():
             if done:
                 break
             state = next_state
-        to_device(self.agent.device, self.agent.policy)
-        merged_episode_data = merge_log(episode_data)
-        self.logger.pprintf(merged_episode_data)
         return episode_data
+
+    def sample_trajectory(self, render):
+        with torch.no_grad():
+            best_reward_episode = -np.inf
+            best_episode_data = {}
+            for i in range(self.args.num_test):
+                episode_data = self.sample_single_trajectory(render)
+                reward_episode = np.sum([e['reward_total'] for e in episode_data])
+                if reward_episode > best_reward_episode:
+                    best_reward_episode = reward_episode
+                    best_episode_data = copy.deepcopy(episode_data)
+        return best_episode_data
 
     def visualize(self, i_episode, episode_data, mode):
         frames = np.array([e['frame'] for e in episode_data])
@@ -175,7 +186,11 @@ class Experiment():
                     name=metric, index=i_iter, value=log[metric], include_running_avg=True)
 
             if should_visualize:
+                to_device(torch.device('cpu'), self.agent.policy)
                 episode_data = self.sample_trajectory(render=True)
+                to_device(self.agent.device, self.agent.policy)
+                merged_episode_data = merge_log(episode_data)
+                self.logger.pprintf(merged_episode_data)
                 self.visualize(i_iter, episode_data, mode='train')
 
             t0 = time.time()
@@ -218,7 +233,8 @@ def process_args(args):
         args.save_every = 1
         args.visualize_every = 5
         args.min_batch_size = 256
-        args.num_threads = 2
+        args.num_threads = 1
+        args.num_test = 5#100
     return args
 
 def make_renderer_track_agent(env):
