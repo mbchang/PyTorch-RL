@@ -111,6 +111,7 @@ class Experiment():
         self.args = args
 
     def sample_trajectory(self, render):
+        # todo: you should get the best trajectory out of 100 or something.
         to_device(torch.device('cpu'), self.agent.policy)
         episode_data = []
         state = self.env.reset()
@@ -219,6 +220,11 @@ def process_args(args):
         args.num_threads = 2
     return args
 
+def make_renderer_track_agent(env):
+    viewer = env.env._get_viewer('rgb_array')
+    viewer.cam.type = 1
+    viewer.cam.trackbodyid = 0
+
 def main(args):
     args = process_args(args)
     logger = create_logger(build_expname, args)
@@ -228,6 +234,7 @@ def main(args):
     env = gym.make(args.env_name)
     state_dim = env.observation_space.shape[0]
     is_disc_action = len(env.action_space.shape) == 0
+    make_renderer_track_agent(env)
 
     """seeding"""
     np.random.seed(args.seed)
