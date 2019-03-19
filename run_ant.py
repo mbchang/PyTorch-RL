@@ -46,29 +46,30 @@ So what is likely a better strategy is to train for 200 but test on 10000.
 3/18/19
 Take best of test run.
 """
-optimizer = ['sgd', 'adam']
+optimizer = ['adam']
 plr = [5e-5]
 clr = [5e-4, 5e-5]
 envs = ['Ant-v3']
 eplen = [200]
+numtest = [4096]
 
 outputdir = 'runs/ant_test_optimizer_lr_eplen_testbest'
 
-gpu = False
+gpu = True
 num_gpus = 2
 i = 0
 
 if gpu:
     os.system('export OMP_NUM_THREADS=1')
 
-for o, p, c, e, l in itertools.product(optimizer, plr, clr, envs, eplen):
+for o, p, c, e, l, n in itertools.product(optimizer, plr, clr, envs, eplen, numtest):
     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
-    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {}'.format(o, p, c, e, l)
+    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {}'.format(o, p, c, e, l, n)
     command += ' --outputdir {}'.format(outputdir)
     command += ' --printf'
     command += ' &'
     print(prefix + command)
-    # os.system(prefix + command)
+    os.system(prefix + command)
     i += 1
     if i >= num_gpus:
         i = 0

@@ -52,8 +52,8 @@ parser.add_argument('--max-iter-num', type=int, default=10000, metavar='N',
                     help='maximal number of main iterations (default: 10000)')
 parser.add_argument('--log-every', type=int, default=1, metavar='N',
                     help='interval between training status logs (default: 1)')
-parser.add_argument('--save-every', type=int, default=10, metavar='N',
-                    help='interval between saving (default: 10)')
+parser.add_argument('--save-every', type=int, default=100, metavar='N',
+                    help='interval between saving (default: 100)')
 parser.add_argument('--visualize-every', type=int, default=500, metavar='N',
                     help='interval between visualizing (default: 500)')
 parser.add_argument('--save-model-interval', type=int, default=0, metavar='N',
@@ -121,6 +121,7 @@ class Experiment():
         for t in range(self.args.maxeplen):  # Don't infinite loop while learning
             state_var = tensor(state).unsqueeze(0)
             with torch.no_grad():
+                # TODO: when I generate the curves I should use a deterministic policy
                 action = self.agent.policy.select_action(state_var)[0].numpy()
             action = int(action) if self.agent.policy.is_disc_action else action.astype(np.float64)
             next_state, reward, done, info = self.env.step(action)
@@ -222,6 +223,7 @@ def build_expname(args):
     expname += '_plr-{}'.format(args.plr)
     expname += '_clr-{}'.format(args.clr)
     expname += '_eplen-{}'.format(args.maxeplen)
+    expname += '_ntest-{}'.format(args.num_test)
     if args.debug: expname+= '_debug'
     return expname
 
