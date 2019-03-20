@@ -5,6 +5,7 @@ import math
 import time
 
 import torch.optim as optim
+import copy
 
 
 def collect_samples(pid, queue, env, policy, custom_reward,
@@ -21,11 +22,15 @@ def collect_samples(pid, queue, env, policy, custom_reward,
     max_c_reward = -1e6
     num_episodes = 0
 
+    best_episode_data = []
+
     while num_steps < min_batch_size:
         state = env.reset()
         if running_state is not None:
             state = running_state(state)
         reward_episode = 0
+
+        episode_data = []
 
         for t in range(maxeplen):
             state_var = tensor(state).unsqueeze(0)
@@ -35,7 +40,7 @@ def collect_samples(pid, queue, env, policy, custom_reward,
                 else:
                     action = policy.select_action(state_var)[0].numpy()
             action = int(action) if policy.is_disc_action else action.astype(np.float64)
-            next_state, reward, done, _ = env.step(action)
+            next_state, reward, done, info = env.step(action)
             reward_episode += reward
             if running_state is not None:
                 next_state = running_state(next_state)
@@ -50,17 +55,28 @@ def collect_samples(pid, queue, env, policy, custom_reward,
 
             memory.push(state, action, mask, next_state, reward)
 
+            e = copy.deepcopy(info)
+            e.update({'reward_total': reward})
             if render:
-                env.render()
+                frame = env.render(mode='rgb_array')
+                e['frame'] = frame
+            episode_data.append(e)
+
+
             if done:
                 break
 
             state = next_state
 
+        assert np.allclose(reward_episode, np.sum([e['reward_total'] for e in episode_data]))
         # log stats
         num_steps += (t + 1)
         num_episodes += 1
         total_reward += reward_episode
+
+        if reward_episode > max_reward:
+            best_episode_data = copy.deepcopy(episode_data)
+
         min_reward = min(min_reward, reward_episode)
         max_reward = max(max_reward, reward_episode)
 
@@ -75,6 +91,9 @@ def collect_samples(pid, queue, env, policy, custom_reward,
         log['avg_c_reward'] = total_c_reward / num_steps
         log['max_c_reward'] = max_c_reward
         log['min_c_reward'] = min_c_reward
+
+    if render:
+        log['episode_data'] = best_episode_data
 
     if queue is not None:
         queue.put([pid, memory, log])
@@ -127,7 +146,7 @@ class Agent:
             assert False
         self.optimizer = {'policy_opt': self.policy_optimizer, 'value_opt': self.value_optimizer}
 
-    def collect_samples(self, min_batch_size):
+    def collect_samples(self, min_batch_size, render=False):
         t_start = time.time()
         to_device(torch.device('cpu'), self.policy)
         thread_batch_size = int(math.floor(min_batch_size / self.num_threads))
@@ -142,7 +161,9 @@ class Agent:
             worker.start()
 
         memory, log = collect_samples(0, None, self.env, self.policy, self.custom_reward, self.mean_action,
-                                      self.render, self.running_state, thread_batch_size, self.args.maxeplen)
+                                      # self.render, 
+                                      render,
+                                      self.running_state, thread_batch_size, self.args.maxeplen)
 
         worker_logs = [None] * len(workers)
         worker_memories = [None] * len(workers)
@@ -153,6 +174,7 @@ class Agent:
         for worker_memory in worker_memories:
             memory.append(worker_memory)
         batch = memory.sample()
+        assert self.num_threads == 1
         if self.num_threads > 1:
             log_list = [log] + worker_logs
             log = merge_log(log_list)

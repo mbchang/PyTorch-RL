@@ -197,10 +197,19 @@ class Experiment():
 
             if should_visualize:
                 to_device(torch.device('cpu'), self.agent.policy)
-                episode_data = self.sample_trajectory(render=True)
-                to_device(self.agent.device, self.agent.policy)
+
+                # episode_data = self.sample_trajectory(render=True)
+                # merged_episode_data = merge_log(episode_data)
+                # self.logger.pprintf(merged_episode_data)
+
+                with torch.no_grad():
+                    batch, test_log = self.agent.collect_samples(args.min_batch_size, render=True)
+                episode_data = test_log['episode_data']
                 merged_episode_data = merge_log(episode_data)
                 self.logger.pprintf(merged_episode_data)
+                self.logger.printf('Test {}\tT_sample {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
+                i_iter, test_log['sample_time'], test_log['min_reward'], test_log['max_reward'], log['avg_reward']))
+                to_device(self.agent.device, self.agent.policy)
                 self.visualize(i_iter, episode_data, mode='train')
 
             t0 = time.time()
