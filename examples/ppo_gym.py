@@ -115,6 +115,7 @@ class Experiment():
         self.args = args
 
     def sample_single_trajectory(self, render):
+        raise NotImplementedError
         episode_data = []
         state = self.env.reset()
         reward_episode = 0
@@ -139,6 +140,7 @@ class Experiment():
         return episode_data
 
     def sample_trajectory(self, render):
+        raise NotImplementedError
         with torch.no_grad():
             best_reward_episode = -np.inf
             best_episode_data = {}
@@ -181,6 +183,19 @@ class Experiment():
                     open(os.path.join(assets_dir(), 'learned_models/{}_ppo.p'.format(args.env_name)), 'wb'))
         to_device(device, self.agent.policy, self.agent.valuefn)
 
+    def test(self, i_iter):
+        to_device(torch.device('cpu'), self.agent.policy)
+        with torch.no_grad():
+            test_batch, test_log = self.agent.collect_samples(
+                args.min_batch_size, deterministic=True, render=True)
+        episode_data = test_log['episode_data']
+        merged_episode_data = merge_log(episode_data)
+        self.logger.pprintf(merged_episode_data)
+        self.logger.printf('Test {}\tT_sample {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
+        i_iter, test_log['sample_time'], test_log['min_reward'], test_log['max_reward'], test_log['avg_reward']))
+        to_device(self.agent.device, self.agent.policy)
+        self.visualize(i_iter, episode_data, mode='test')
+
     def main_loop(self):
         for i_iter in range(args.max_iter_num+1):
             self.logger.update_variable(name='i_iter', index=i_iter, value=i_iter)
@@ -196,21 +211,7 @@ class Experiment():
                     name=metric, index=i_iter, value=log[metric], include_running_avg=True)
 
             if should_visualize:
-                to_device(torch.device('cpu'), self.agent.policy)
-
-                # episode_data = self.sample_trajectory(render=True)
-                # merged_episode_data = merge_log(episode_data)
-                # self.logger.pprintf(merged_episode_data)
-
-                with torch.no_grad():
-                    test_batch, test_log = self.agent.collect_samples(args.min_batch_size, render=True)
-                episode_data = test_log['episode_data']
-                merged_episode_data = merge_log(episode_data)
-                self.logger.pprintf(merged_episode_data)
-                self.logger.printf('Test {}\tT_sample {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
-                i_iter, test_log['sample_time'], test_log['min_reward'], test_log['max_reward'], log['avg_reward']))
-                to_device(self.agent.device, self.agent.policy)
-                self.visualize(i_iter, episode_data, mode='train')
+                self.test(i_iter)
 
             t0 = time.time()
             self.rl_alg.update_params(batch, i_iter, self.agent)
@@ -245,9 +246,6 @@ def initialize_logger(logger):
     logger.add_metric('running_min_reward', -np.inf, operator.ge)
     logger.add_metric('running_avg_reward', -np.inf, operator.ge)
     logger.add_metric('running_max_reward', -np.inf, operator.ge)
-    # logger.add_metric('min_reward', -np.inf, operator.ge)
-    # logger.add_metric('avg_reward', -np.inf, operator.ge)
-    # logger.add_metric('max_reward', -np.inf, operator.ge)
 
 def process_args(args):
     if args.debug:
@@ -255,9 +253,9 @@ def process_args(args):
         args.max_iter_num = 5
         args.save_every = 1
         args.visualize_every = 5
-        args.min_batch_size = 256
+        args.min_batch_size = 512
         args.num_threads = 1
-        args.num_test = 5#100
+        args.num_test = 5
     return args
 
 def make_renderer_track_agent(env):
@@ -305,7 +303,7 @@ def main(args):
     value_net.to(device)
 
     """create agent"""
-    agent = Agent(env, policy_net, value_net, device, args, running_state=running_state, render=args.render, num_threads=args.num_threads)
+    agent = Agent(env, policy_net, value_net, device, args, running_state=running_state, num_threads=args.num_threads)
 
     rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
 

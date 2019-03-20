@@ -62,7 +62,6 @@ def collect_samples(pid, queue, env, policy, custom_reward,
                 e['frame'] = frame
             episode_data.append(e)
 
-
             if done:
                 break
 
@@ -120,16 +119,13 @@ def merge_log(log_list):
 
 class Agent:
 
-    def __init__(self, env, policy, valuefn, device, args, custom_reward=None,
-                 mean_action=False, render=False, running_state=None, num_threads=1):
+    def __init__(self, env, policy, valuefn, device, args, custom_reward=None, running_state=None, num_threads=1):
         self.env = env
         self.policy = policy
         self.valuefn = valuefn
         self.device = device
         self.custom_reward = custom_reward
-        self.mean_action = mean_action
         self.running_state = running_state
-        self.render = render
         self.num_threads = num_threads
 
         self.args = args
@@ -146,7 +142,7 @@ class Agent:
             assert False
         self.optimizer = {'policy_opt': self.policy_optimizer, 'value_opt': self.value_optimizer}
 
-    def collect_samples(self, min_batch_size, render=False):
+    def collect_samples(self, min_batch_size, deterministic=False, render=False):
         t_start = time.time()
         to_device(torch.device('cpu'), self.policy)
         thread_batch_size = int(math.floor(min_batch_size / self.num_threads))
@@ -154,16 +150,13 @@ class Agent:
         workers = []
 
         for i in range(self.num_threads-1):
-            worker_args = (i+1, queue, self.env, self.policy, self.custom_reward, self.mean_action,
-                           False, self.running_state, thread_batch_size, self.args.maxeplen)
+            worker_args = (i+1, queue, self.env, self.policy, self.custom_reward, determinisitic, render, self.running_state, thread_batch_size, self.args.maxeplen)
             workers.append(multiprocessing.Process(target=collect_samples, args=worker_args))
         for worker in workers:
             worker.start()
 
-        memory, log = collect_samples(0, None, self.env, self.policy, self.custom_reward, self.mean_action,
-                                      # self.render, 
-                                      render,
-                                      self.running_state, thread_batch_size, self.args.maxeplen)
+        memory, log = collect_samples(0, None, self.env, self.policy, self.custom_reward, 
+            deterministic, render, self.running_state, thread_batch_size, self.args.maxeplen)
 
         worker_logs = [None] * len(workers)
         worker_memories = [None] * len(workers)
