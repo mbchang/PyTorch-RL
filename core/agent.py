@@ -94,7 +94,7 @@ def collect_samples(pid, queue, env, policy, custom_reward,
 
     if render:
         log['episode_data'] = best_episode_data
-
+ 
     if queue is not None:
         queue.put([pid, memory, log])
     else:

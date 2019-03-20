@@ -53,7 +53,7 @@ envs = ['Ant-v3']
 eplen = [200]
 numtest = [4096]
 
-outputdir = 'runs/ant_test_optimizer_lr_eplen_testbest'
+outputdir = 'runs/ant_test_optimizer_lr_eplen_testbest2'
 
 gpu = True
 num_gpus = 2

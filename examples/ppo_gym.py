@@ -203,7 +203,7 @@ class Experiment():
                 # self.logger.pprintf(merged_episode_data)
 
                 with torch.no_grad():
-                    batch, test_log = self.agent.collect_samples(args.min_batch_size, render=True)
+                    test_batch, test_log = self.agent.collect_samples(args.min_batch_size, render=True)
                 episode_data = test_log['episode_data']
                 merged_episode_data = merge_log(episode_data)
                 self.logger.pprintf(merged_episode_data)
