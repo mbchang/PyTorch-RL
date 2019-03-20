@@ -45,6 +45,8 @@ So what is likely a better strategy is to train for 200 but test on 10000.
 """
 3/18/19
 Take best of test run.
+
+It works now, when I use the collect_samples() to test. I wonder wny.
 """
 optimizer = ['adam']
 plr = [5e-5]
