@@ -122,7 +122,6 @@ class Experiment():
         for t in range(self.args.maxeplen):  # Don't infinite loop while learning
             state_var = tensor(state).unsqueeze(0)
             with torch.no_grad():
-                # TODO: when I generate the curves I should use a deterministic policy
                 action = self.agent.policy.select_action(state_var)[0].numpy()
             action = int(action) if self.agent.policy.is_disc_action else action.astype(np.float64)
             next_state, reward, done, info = self.env.step(action)
