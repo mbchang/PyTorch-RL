@@ -8,8 +8,54 @@ import torch.optim as optim
 import copy
 
 
-def collect_samples(pid, queue, env, policy, custom_reward,
-                    mean_action, render, running_state, min_batch_size, maxeplen):
+def sample_single_trajectory(env, policy, custom_reward, mean_action, render, running_state, maxeplen, memory):
+    state = env.reset()
+    if running_state is not None:
+        state = running_state(state)
+    reward_episode = 0
+
+    episode_data = []
+
+    for t in range(maxeplen):
+        state_var = tensor(state).unsqueeze(0)
+        with torch.no_grad():
+            if mean_action:
+                action = policy(state_var)[0][0].numpy()
+            else:
+                action = policy.select_action(state_var)[0].numpy()
+        action = int(action) if policy.is_disc_action else action.astype(np.float64)
+        next_state, reward, done, info = env.step(action)
+        reward_episode += reward
+        if running_state is not None:
+            next_state = running_state(next_state)
+
+        if custom_reward is not None:
+            reward = custom_reward(state, action)
+            total_c_reward += reward
+            min_c_reward = min(min_c_reward, reward)
+            max_c_reward = max(max_c_reward, reward)
+
+        mask = 0 if done else 1
+
+        memory.push(state, action, mask, next_state, reward)
+
+        e = copy.deepcopy(info)
+        e.update({'reward_total': reward})
+        if render:
+            frame = env.render(mode='rgb_array')
+            e['frame'] = frame
+        episode_data.append(e)
+
+        if done:
+            break
+
+        state = next_state
+
+    assert np.allclose(reward_episode, np.sum([e['reward_total'] for e in episode_data]))
+    return episode_data, t
+
+
+def collect_samples(pid, queue, env, policy, custom_reward, mean_action, render, running_state, min_batch_size, maxeplen):
     torch.randn(pid)
     log = dict()
     memory = Memory()
@@ -25,49 +71,10 @@ def collect_samples(pid, queue, env, policy, custom_reward,
     best_episode_data = []
 
     while num_steps < min_batch_size:
-        state = env.reset()
-        if running_state is not None:
-            state = running_state(state)
-        reward_episode = 0
+        episode_data, t = sample_single_trajectory(env, policy, custom_reward, mean_action, render, running_state, maxeplen, memory)
 
-        episode_data = []
+        reward_episode = np.sum([e['reward_total'] for e in episode_data])
 
-        for t in range(maxeplen):
-            state_var = tensor(state).unsqueeze(0)
-            with torch.no_grad():
-                if mean_action:
-                    action = policy(state_var)[0][0].numpy()
-                else:
-                    action = policy.select_action(state_var)[0].numpy()
-            action = int(action) if policy.is_disc_action else action.astype(np.float64)
-            next_state, reward, done, info = env.step(action)
-            reward_episode += reward
-            if running_state is not None:
-                next_state = running_state(next_state)
-
-            if custom_reward is not None:
-                reward = custom_reward(state, action)
-                total_c_reward += reward
-                min_c_reward = min(min_c_reward, reward)
-                max_c_reward = max(max_c_reward, reward)
-
-            mask = 0 if done else 1
-
-            memory.push(state, action, mask, next_state, reward)
-
-            e = copy.deepcopy(info)
-            e.update({'reward_total': reward})
-            if render:
-                frame = env.render(mode='rgb_array')
-                e['frame'] = frame
-            episode_data.append(e)
-
-            if done:
-                break
-
-            state = next_state
-
-        assert np.allclose(reward_episode, np.sum([e['reward_total'] for e in episode_data]))
         # log stats
         num_steps += (t + 1)
         num_episodes += 1
