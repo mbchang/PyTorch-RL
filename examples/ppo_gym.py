@@ -48,8 +48,8 @@ parser.add_argument('--seed', type=int, default=1, metavar='N',
                     help='random seed (default: 1)')
 parser.add_argument('--min-batch-size', type=int, default=4096, metavar='N',
                     help='minimal batch size per PPO update (default: 4096)')
-parser.add_argument('--max-iter-num', type=int, default=10000, metavar='N',
-                    help='maximal number of main iterations (default: 10000)')
+parser.add_argument('--max-iter-num', type=int, default=5000, metavar='N',
+                    help='maximal number of main iterations (default: 5000)')
 parser.add_argument('--log-every', type=int, default=1, metavar='N',
                     help='interval between training status logs (default: 1)')
 parser.add_argument('--save-every', type=int, default=100, metavar='N',
@@ -74,6 +74,10 @@ parser.add_argument('--debug', action='store_true',
                     help='debug')
 parser.add_argument('--printf', action='store_true',
                     help='printf')
+
+parser.add_argument('--vwght', type=str, default='1 0',
+                    help='weight for xy: 1 0 is x vel forward, 0 -1 is y vel backward')
+
 
 args = parser.parse_args()
 
@@ -233,6 +237,7 @@ def build_expname(args):
     expname += '_clr-{}'.format(args.clr)
     expname += '_eplen-{}'.format(args.maxeplen)
     expname += '_ntest-{}'.format(args.num_test)
+    expname += '_vw-{}'.format(args.vwght.replace(' ', ''))
     if args.debug: expname+= '_debug'
     return expname
 
@@ -252,7 +257,7 @@ def process_args(args):
         args.max_iter_num = 5
         args.save_every = 1
         args.visualize_every = 5
-        args.min_batch_size = 512
+        args.min_batch_size = 1024
         args.num_threads = 1
         args.num_test = 5
     return args
@@ -262,16 +267,23 @@ def make_renderer_track_agent(env):
     viewer.cam.type = 1
     viewer.cam.trackbodyid = 0
 
+def initialize_environment(args):
+    vw_str = args.vwght
+    xw, yw = map(int, vw_str.split())
+    vw = {'x': xw, 'y': yw}
+    env = gym.make(args.env_name, velocity_weight=vw)
+    state_dim = env.observation_space.shape[0]
+    is_disc_action = len(env.action_space.shape) == 0
+    make_renderer_track_agent(env)
+    return env, state_dim, is_disc_action
+
 def main(args):
     args = process_args(args)
     logger = create_logger(build_expname, args)
     initialize_logger(logger)
 
     """environment"""
-    env = gym.make(args.env_name)
-    state_dim = env.observation_space.shape[0]
-    is_disc_action = len(env.action_space.shape) == 0
-    make_renderer_track_agent(env)
+    env, state_dim, is_disc_action = initialize_environment(args)
 
     """seeding"""
     np.random.seed(args.seed)

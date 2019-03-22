@@ -42,20 +42,54 @@ So what is likely a better strategy is to train for 200 but test on 10000.
 #         i = 0
 
 
-"""
-3/18/19
-Take best of test run.
+# """
+# 3/18/19
+# Take best of test run.
 
-It works now, when I use the collect_samples() to test. I wonder wny.
+# It works now, when I use the collect_samples() to test. I wonder wny.
+# """
+# optimizer = ['adam']
+# plr = [5e-5]
+# clr = [5e-4, 5e-5]
+# envs = ['Ant-v3']
+# eplen = [200]
+# numtest = [4096]
+
+# outputdir = 'runs/ant_test_optimizer_lr_eplen_testbest2'
+
+# gpu = True
+# num_gpus = 2
+# i = 0
+
+# if gpu:
+#     os.system('export OMP_NUM_THREADS=1')
+
+# for o, p, c, e, l, n in itertools.product(optimizer, plr, clr, envs, eplen, numtest):
+#     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+#     command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {}'.format(o, p, c, e, l, n)
+#     command += ' --outputdir {}'.format(outputdir)
+#     command += ' --printf'
+#     command += ' &'
+#     print(prefix + command)
+#     # os.system(prefix + command)
+#     i += 1
+#     if i >= num_gpus:
+#         i = 0
+
+
+"""
+3/20/19
+4 directions Ant
 """
 optimizer = ['adam']
 plr = [5e-5]
-clr = [5e-4, 5e-5]
+clr = [5e-4]
 envs = ['Ant-v3']
 eplen = [200]
-numtest = [4096]
+numtest = [100]
+vweights = ['1 0', '-1 0', '0 1', '0 -1']
 
-outputdir = 'runs/ant_test_optimizer_lr_eplen_testbest2'
+outputdir = 'runs/ant_test_optimizer_lr_vw'
 
 gpu = True
 num_gpus = 2
@@ -64,9 +98,9 @@ i = 0
 if gpu:
     os.system('export OMP_NUM_THREADS=1')
 
-for o, p, c, e, l, n in itertools.product(optimizer, plr, clr, envs, eplen, numtest):
+for o, p, c, e, l, n, vw in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights):
     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
-    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {}'.format(o, p, c, e, l, n)
+    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\"'.format(o, p, c, e, l, n, vw)
     command += ' --outputdir {}'.format(outputdir)
     command += ' --printf'
     command += ' &'
