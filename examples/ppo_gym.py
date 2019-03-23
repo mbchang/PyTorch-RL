@@ -313,7 +313,7 @@ def main(args):
                 policy_net = Policy(state_dim, env.action_space.shape[0], log_std=args.log_std)
             elif args.policy == 'primitive':
                 encoder = Encoder([state_dim, 512, 256])
-                policy_net = PrimitivePolicy(encoder=encoder, ib_dims=[256, 128], hdim=256, outdim=env.action_space.shape[0])
+                policy_net = PrimitivePolicy(encoder=encoder, ib_dims=[256, 128], hdim=256, outdim=env.action_space.shape[0], device=device)
             else:
                 False
 
