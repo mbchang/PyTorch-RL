@@ -61,6 +61,13 @@ parser.add_argument('--save-model-interval', type=int, default=0, metavar='N',
                     help="interval between saving model (default: 0, means don't save)")
 parser.add_argument('--gpu-index', type=int, default=0, metavar='N')
 
+parser.add_argument('--klp', type=float, default=0.0002,
+                    help='KL for info bottlneeck for primitive')
+parser.add_argument('--klw', type=float, default=0.0004,
+                    help='KL for info bottlneeck for weight')
+parser.add_argument('--entropy-coeff', type=float, default=0.005,
+                    help='KL for info bottlneeck for weight')
+
 parser.add_argument('--maxeplen', type=int, default=10000, metavar='N',
                     help='maximal number of main iterations (default: 10000)')
 parser.add_argument('--num-test', type=int, default=100,
@@ -261,7 +268,7 @@ def process_args(args):
         args.max_iter_num = 5
         args.save_every = 1
         args.visualize_every = 5
-        args.min_batch_size = 1024
+        args.min_batch_size = 128
         args.num_threads = 1
         args.num_test = 5
     return args

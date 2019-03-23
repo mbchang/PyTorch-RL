@@ -13,7 +13,6 @@ class PPO():
         self.device = device
         self.args = args
 
-        self.args.l2_reg = self.args.l2_reg
         self.optim_epochs = optim_epochs
         self.optim_batch_size = optim_batch_size
         self.optim_value_iternum = 1
@@ -26,7 +25,7 @@ class PPO():
         masks = torch.from_numpy(np.stack(batch.mask)).to(self.dtype).to(self.device)
         with torch.no_grad():
             values = self.agent.valuefn(states)
-            fixed_log_probs = self.agent.policy.get_log_prob(states, actions)
+            fixed_log_probs, _ = self.agent.policy.get_log_prob(states, actions)
 
         """get advantage estimation from the trajectories"""
         advantages, returns = estimate_advantages(rewards, masks, values, self.args.gamma, self.args.tau, self.device)
@@ -62,12 +61,18 @@ class PPO():
             self.agent.value_optimizer.step()
 
         """update policy"""
-        log_probs = self.agent.policy.get_log_prob(states, actions)
+        log_probs, kl = self.agent.policy.get_log_prob(states, actions)
         ratio = torch.exp(log_probs - fixed_log_probs)
         surr1 = ratio * advantages
         surr2 = torch.clamp(ratio, 1.0 - self.args.clip_epsilon, 1.0 + self.args.clip_epsilon) * advantages
-        policy_surr = -torch.min(surr1, surr2).mean()
+        policy_surr = -torch.min(surr1, surr2).mean()  # mean over batch
+        entropy_penalty = self.args.entropy_coeff * self.agent.policy.get_entropy(states).mean()  # mean over batch
+        ib_penalty = self.args.klp * kl.mean()  # mean over batch
+        policy_surr += ib_penalty - entropy_penalty  # maximize entropy
         self.agent.policy_optimizer.zero_grad()
         policy_surr.backward()
         torch.nn.utils.clip_grad_norm_(self.agent.policy.parameters(), 40)
         self.agent.policy_optimizer.step()
+
+
+
