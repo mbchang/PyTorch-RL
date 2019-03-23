@@ -19,10 +19,7 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
     for t in range(maxeplen):
         state_var = tensor(state).unsqueeze(0)
         with torch.no_grad():
-            if mean_action:
-                action = policy(state_var)[0][0].numpy()
-            else:
-                action = policy.select_action(state_var)[0].numpy()
+            action = policy.select_action(state_var, deterministic=mean_action)[0].numpy()
         action = int(action) if policy.is_disc_action else action.astype(np.float64)
         next_state, reward, done, info = env.step(action)
         reward_episode += reward

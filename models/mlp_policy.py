@@ -36,10 +36,13 @@ class Policy(nn.Module):
 
         return action_mean, action_log_std, action_std
 
-    def select_action(self, x):
+    def select_action(self, x, deterministic=False):
         action_mean, _, action_std = self.forward(x)
-        action = torch.normal(action_mean, action_std)
-        return action
+        if deterministic:
+            return action_mean
+        else:
+            action = torch.normal(action_mean, action_std)
+            return action
 
     def get_kl(self, x):
         mean1, log_std1, std1 = self.forward(x)

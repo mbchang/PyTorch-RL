@@ -10,6 +10,7 @@ from utils import *
 from models.mlp_policy import Policy
 from models.mlp_critic import Value
 from models.mlp_policy_disc import DiscretePolicy
+from models.primitives import Encoder, PrimitivePolicy
 from core.agent import Agent
 
 from moviepy.editor import ImageSequenceClip
@@ -68,6 +69,8 @@ parser.add_argument('--resume', type=str, default='',
                     help='.tar path of saved model')
 parser.add_argument('--outputdir', type=str, default='runs',
                     help='outputdir')
+parser.add_argument('--policy', type=str, default='vanilla',
+                    help='vanilla | primitive | mixture')
 parser.add_argument('--opt', type=str, default='sgd',
                     help='adam | sgd')
 parser.add_argument('--debug', action='store_true',
@@ -238,6 +241,7 @@ def build_expname(args):
     expname += '_eplen-{}'.format(args.maxeplen)
     expname += '_ntest-{}'.format(args.num_test)
     expname += '_vw-{}'.format(args.vwght.replace(' ', ''))
+    expname += '_p-{}'.format(args.policy)
     if args.debug: expname+= '_debug'
     return expname
 
@@ -298,7 +302,14 @@ def main(args):
         if is_disc_action:
             policy_net = DiscretePolicy(state_dim, env.action_space.n)
         else:
-            policy_net = Policy(state_dim, env.action_space.shape[0], log_std=args.log_std)
+            if args.policy == 'vanilla':
+                policy_net = Policy(state_dim, env.action_space.shape[0], log_std=args.log_std)
+            elif args.policy == 'primitive':
+                encoder = Encoder([state_dim, 512, 256])
+                policy_net = PrimitivePolicy(encoder=encoder, ib_dims=[256, 128], hdim=256, outdim=env.action_space.shape[0])
+            else:
+                False
+
         value_net = Value(state_dim)
     ######################################################
     # TODO verify that this works
