@@ -25,7 +25,9 @@ class PPO():
         masks = torch.from_numpy(np.stack(batch.mask)).to(self.dtype).to(self.device)
         with torch.no_grad():
             values = self.agent.valuefn(states)
-            fixed_log_probs, _, _ = self.agent.policy.get_log_prob(states, actions)
+            # fixed_log_probs, _, _ = self.agent.policy.get_log_prob(states, actions)
+            fixed_log_probs, _ = self.agent.policy.get_log_prob(states, actions)
+            # fixed_log_probs = self.agent.policy.get_log_prob(states, actions)
 
         """get advantage estimation from the trajectories"""
         advantages, returns = estimate_advantages(rewards, masks, values, self.args.gamma, self.args.tau, self.device)
@@ -61,18 +63,24 @@ class PPO():
             self.agent.value_optimizer.step()
 
         """update policy"""
-        log_probs, kl, entropy = self.agent.policy.get_log_prob(states, actions)
+        # log_probs, kl, entropy = self.agent.policy.get_log_prob(states, actions)
+        log_probs, entropy = self.agent.policy.get_log_prob(states, actions)
+        # log_probs = self.agent.policy.get_log_prob(states, actions)
         ratio = torch.exp(log_probs - fixed_log_probs)
         surr1 = ratio * advantages
         surr2 = torch.clamp(ratio, 1.0 - self.args.clip_epsilon, 1.0 + self.args.clip_epsilon) * advantages
         policy_surr = -torch.min(surr1, surr2).mean()  # mean over batch
         entropy_penalty = self.args.entropy_coeff * entropy.mean()  # mean over batch
-        ib_penalty = self.args.klp * kl.mean()  # mean over batch
+        # ib_penalty = self.args.klp * kl.mean()  # mean over batch
+        ib_penalty = 0
         policy_surr += ib_penalty - entropy_penalty  # maximize entropy
         self.agent.policy_optimizer.zero_grad()
         policy_surr.backward()
         torch.nn.utils.clip_grad_norm_(self.agent.policy.parameters(), 40)
         self.agent.policy_optimizer.step()
 
+        """log"""
+        num_clipped = (surr1-surr2).nonzero().size(0)
+        ratio_clipped = num_clipped / states.size(0)
 
 

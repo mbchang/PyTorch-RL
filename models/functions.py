@@ -88,12 +88,12 @@ class GaussianParams(nn.Module):
             self.mu.weight.data.mul_(0.1)
             nn.init.constant_(self.mu.bias, 0.0)
 
-            self.logstd.weight.data.mul_(0.1)
+            self.logstd.weight.data.mul_(0.1)  # Can take out
             nn.init.constant_(self.logstd.bias, np.log(0.1))
 
     def forward(self, x):
         mu = self.mu(x)
         logstd = self.logstd(x)
-        return mu, logstd#torch.exp(logstd)
+        return mu, logstd
 
 

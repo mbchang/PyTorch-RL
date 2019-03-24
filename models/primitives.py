@@ -48,16 +48,17 @@ class GaussianVIBPolicy(nn.Module):
     def get_log_prob(self, state, action):
         mu, std, kl = self.forward(state)
         dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
-        log_prob = dist.log_prob(action)
-        entropy = dist.entropy()
-        return log_prob, kl, entropy
+        log_prob = dist.log_prob(action)  # keep dims=True
+        entropy = dist.entropy()  # keep
+        bsize = state.size(0)
+        return log_prob.view(bsize, 1), kl.view(bsize, 1), entropy.view(bsize, 1)
 
-class PrimitivePolicy(GaussianVIBPolicy):
+class PrimitiveVIBPolicy(GaussianVIBPolicy):
     """
 
     """
     def __init__(self, encoder, bottleneck_dim, decoder_dims, device, fixed_var=False):
-        super(PrimitivePolicy, self).__init__()
+        super(PrimitiveVIBPolicy, self).__init__()
         self.outdim = decoder_dims[-1]
         self.encoder = encoder
         self.ib = InformationBottleneck(encoder.dims[-1], bottleneck_dim, device=device)
@@ -70,6 +71,50 @@ class PrimitivePolicy(GaussianVIBPolicy):
         h = F.relu(self.decoder(z))
         mu, logstd = self.parameter_producer(h)
         return mu, torch.exp(logstd), kl
+
+class GaussianPolicy(nn.Module):
+    def __init__(self):
+        super(GaussianPolicy, self).__init__()
+        self.is_disc_action = False
+
+    def forward(self, x):
+        raise NotImplementedError
+
+    def select_action(self, state, deterministic=False):
+        mu, std = self.forward(state)
+        if deterministic:
+            return mu
+        else:
+            dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
+            action = dist.sample()
+            return action
+
+    def get_log_prob(self, state, action):
+        mu, std = self.forward(state)
+        dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
+        log_prob = dist.log_prob(action)  # keep dims=True
+        entropy = dist.entropy()  # keep
+        bsize = state.size(0)
+        return log_prob.view(bsize, 1), entropy.view(bsize, 1)
+
+class PrimitivePolicy(GaussianPolicy):
+    """
+
+    """
+    def __init__(self, encoder, bottleneck_dim, decoder_dims, device, fixed_var=False):
+        super(PrimitivePolicy, self).__init__()
+        self.outdim = decoder_dims[-1]
+        self.encoder = encoder
+        self.ib = nn.Linear(encoder.dims[-1], bottleneck_dim)
+        self.decoder = nn.Linear(bottleneck_dim, decoder_dims[0])
+        self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_var=fixed_var)
+
+    def forward(self, x):
+        x = self.encoder(x)
+        z = self.ib(x)
+        h = F.relu(self.decoder(z))
+        mu, logstd = self.parameter_producer(h)
+        return mu, torch.exp(logstd)
 
 class CompositePolicy(GaussianVIBPolicy):
     def __init__(self, weight_network, primitives):
@@ -104,7 +149,7 @@ def debug2():
     state_dim = 60
     action_dim = 12
     encoder = Feedforward([state_dim, 512, 256], out_act=F.relu)
-    policy = PrimitivePolicy(encoder=encoder, ib_dims=[256, 128], hdim=256, outdim=action_dim)
+    policy = PrimitiveVIBPolicy(encoder=encoder, ib_dims=[256, 128], hdim=256, outdim=action_dim)
     print(policy)
 
 def debug():

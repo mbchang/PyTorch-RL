@@ -10,7 +10,7 @@ from utils import *
 from models.mlp_policy import Policy
 from models.mlp_critic import Value
 from models.mlp_policy_disc import DiscretePolicy
-from models.primitives import Feedforward, PrimitivePolicy, CompositePolicy, WeightNetwork
+from models.primitives import Feedforward, PrimitiveVIBPolicy, CompositePolicy, WeightNetwork, PrimitivePolicy
 from core.agent import Agent
 
 from moviepy.editor import ImageSequenceClip
