@@ -28,9 +28,9 @@ class WeightNetwork(nn.Module):
         weights = self.decoder(h)
         return weights, kl
 
-class GaussianVIBPolicy(nn.Module):
+class GaussianPolicy(nn.Module):
     def __init__(self):
-        super(GaussianVIBPolicy, self).__init__()
+        super(GaussianPolicy, self).__init__()
         self.is_disc_action = False
 
     def forward(self, x):
@@ -53,15 +53,16 @@ class GaussianVIBPolicy(nn.Module):
         entropy = dist.entropy().view(bsize, 1)
         return {'log_prob': log_prob, 'kl': kl, 'entropy': entropy}
 
-class PrimitiveVIBPolicy(GaussianVIBPolicy):
+class PrimitivePolicy(GaussianPolicy):
     """
 
     """
-    def __init__(self, encoder, bottleneck_dim, decoder_dims, device, fixed_var=False):
-        super(PrimitiveVIBPolicy, self).__init__()
+    def __init__(self, encoder, bottleneck_dim, decoder_dims, device, fixed_var=False, vib=False):
+        super(PrimitivePolicy, self).__init__()
         self.outdim = decoder_dims[-1]
         self.encoder = encoder
-        self.bottleneck = InformationBottleneck(encoder.dims[-1], bottleneck_dim, device=device)
+        bottleneck = InformationBottleneck if vib else DeterministicBottleneck
+        self.bottleneck = bottleneck(encoder.dims[-1], bottleneck_dim, device=device)
         self.decoder = nn.Linear(bottleneck_dim, decoder_dims[0])
         self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_var=fixed_var)
 
@@ -72,51 +73,7 @@ class PrimitiveVIBPolicy(GaussianVIBPolicy):
         mu, logstd = self.parameter_producer(h)
         return mu, torch.exp(logstd), kl
 
-class GaussianPolicy(nn.Module):
-    def __init__(self):
-        super(GaussianPolicy, self).__init__()
-        self.is_disc_action = False
-
-    def forward(self, x):
-        raise NotImplementedError
-
-    def select_action(self, state, deterministic=False):
-        mu, std = self.forward(state)
-        if deterministic:
-            return mu
-        else:
-            dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
-            action = dist.sample()
-            return action
-
-    def get_log_prob(self, state, action):
-        bsize = state.size(0)
-        mu, std = self.forward(state)
-        dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
-        log_prob = dist.log_prob(action).view(bsize, 1)
-        entropy = dist.entropy().view(bsize, 1)
-        return {'log_prob': log_prob, 'entropy': entropy}
-
-class PrimitivePolicy(GaussianPolicy):
-    """
-
-    """
-    def __init__(self, encoder, bottleneck_dim, decoder_dims, device, fixed_var=False):
-        super(PrimitivePolicy, self).__init__()
-        self.outdim = decoder_dims[-1]
-        self.encoder = encoder
-        self.bottleneck = DeterministicBottleneck(encoder.dims[-1], bottleneck_dim, device=device)
-        self.decoder = nn.Linear(bottleneck_dim, decoder_dims[0])
-        self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_var=fixed_var)
-
-    def forward(self, x):
-        x = self.encoder(x)
-        z = self.bottleneck(x)
-        h = F.relu(self.decoder(z))
-        mu, logstd = self.parameter_producer(h)
-        return mu, torch.exp(logstd)
-
-class CompositePolicy(GaussianVIBPolicy):
+class CompositePolicy(GaussianPolicy):
     def __init__(self, weight_network, primitives):
         super(CompositePolicy, self).__init__()
         self.primitives = primitives

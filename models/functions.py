@@ -81,7 +81,14 @@ class DeterministicBottleneck(nn.Module):
 
     def forward(self, x):
         z = self.network(x)
-        return z
+        kl = torch.zeros(self.zdim).to(self.get_device())  # dummy kl
+        return z, kl
+
+    def get_device(self):
+        if next(self.parameters()).is_cuda:
+            return self.device
+        else:
+            return torch.device('cpu')
 
 class GaussianParams(nn.Module):
     """
