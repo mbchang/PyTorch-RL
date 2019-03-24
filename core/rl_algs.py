@@ -67,14 +67,15 @@ class PPO():
         info = self.agent.policy.get_log_prob(states, actions)
         log_probs = info['log_prob']
         entropy = info['entropy']
+        kl = info['kl']
 
         ratio = torch.exp(log_probs - fixed_log_probs)
         surr1 = ratio * advantages
         surr2 = torch.clamp(ratio, 1.0 - self.args.clip_epsilon, 1.0 + self.args.clip_epsilon) * advantages
         policy_surr = -torch.min(surr1, surr2).mean()  # mean over batch
         entropy_penalty = self.args.entropy_coeff * entropy.mean()  # mean over batch
-        # ib_penalty = self.args.klp * kl.mean()  # mean over batch
-        ib_penalty = 0
+        ib_penalty = self.args.klp * kl.mean()  # mean over batch
+        # ib_penalty = 0
         policy_surr += ib_penalty - entropy_penalty  # maximize entropy
         self.agent.policy_optimizer.zero_grad()
         policy_surr.backward()
