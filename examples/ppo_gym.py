@@ -244,6 +244,15 @@ class Experiment():
             """clean up gpu memory"""
             torch.cuda.empty_cache()
 
+def visualize_parameters(model, aString=None):
+    if aString:
+        print(aString)
+    for n, p in model.named_parameters():
+        if p.grad is None:
+            print(n, p.size(), p.data.norm(), "No grad")
+        else:
+            print(n, p.size(), p.data.norm(), p.grad.data.norm(), torch.max(p.grad.data))
+
 def build_expname(args):
     expname = 'env-{}'.format(args.env_name)
     expname += '_opt-{}'.format(args.opt)
@@ -320,8 +329,10 @@ def main(args):
                     encoder = Feedforward([state_dim, 64, 64], out_act=F.relu)
                     policy_net = PrimitivePolicy(encoder=encoder, ib_dims=[64, 64], hdim=64, outdim=env.action_space.shape[0], device=device)
                 else:
-                    encoder = Feedforward([state_dim, 512, 256], out_act=F.relu)
-                    policy_net = PrimitivePolicy(encoder=encoder, ib_dims=[256, 128], hdim=256, outdim=env.action_space.shape[0], device=device)
+                    # encoder = Feedforward([state_dim, 512, 256], out_act=F.relu)
+                    # policy_net = PrimitivePolicy(encoder=encoder, ib_dims=[256, 128], hdim=256, outdim=env.action_space.shape[0], device=device)
+                    encoder = Feedforward([state_dim, 128], out_act=F.relu)
+                    policy_net = PrimitivePolicy(encoder=encoder, ib_dims=[128, 128], hdim=128, outdim=env.action_space.shape[0], device=device)
             elif args.policy == 'composite':
                 num_primitives = 3
                 if args.debug:
