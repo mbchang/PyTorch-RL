@@ -329,6 +329,7 @@ def main(args):
                 if args.debug:
                     encoder = Feedforward([state_dim, 64, 64], out_act=F.relu)
                     policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, env.action_space.shape[0]], device=device, fixed_var=args.fixed_var)
+                    # policy_net = PrimitiveVIBPolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, env.action_space.shape[0]], device=device, fixed_var=args.fixed_var)
                 else:
                     # encoder = Feedforward([state_dim, 512, 256], out_act=F.relu)
                     # policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[256, env.action_space.shape[0]], device=device)

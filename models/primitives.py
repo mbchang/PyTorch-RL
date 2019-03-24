@@ -48,7 +48,6 @@ class GaussianVIBPolicy(nn.Module):
     def get_log_prob(self, state, action):
         bsize = state.size(0)
         mu, std, kl = self.forward(state)
-        kl = kl.view(bsize, 1)
         dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
         log_prob = dist.log_prob(action).view(bsize, 1)
         entropy = dist.entropy().view(bsize, 1)

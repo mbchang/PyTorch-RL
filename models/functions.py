@@ -58,10 +58,11 @@ class InformationBottleneck(nn.Module):
         return kl
 
     def forward(self, x):
+        bsize = x.size(0)
         mu, logstd = self.parameter_producer(x)
         dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(torch.exp(logstd)))
         z = dist.rsample()
-        kl = self.kl_standard_normal(dist)
+        kl = self.kl_standard_normal(dist).view(bsize, 1)
         return z, kl
 
     def get_device(self):
