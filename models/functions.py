@@ -71,6 +71,18 @@ class InformationBottleneck(nn.Module):
         else:
             return torch.device('cpu')
 
+class DeterministicBottleneck(nn.Module):
+    def __init__(self, hdim, zdim, device):
+        super(DeterministicBottleneck, self).__init__()
+        self.hdim = hdim
+        self.zdim = zdim
+        self.device = device
+        self.network = nn.Linear(hdim, zdim)
+
+    def forward(self, x):
+        z = self.network(x)
+        return z
+
 class GaussianParams(nn.Module):
     """
         h --> z

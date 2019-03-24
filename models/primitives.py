@@ -4,7 +4,7 @@ import torch.nn.functional as F
 from torch.distributions import Categorical
 from torch.distributions.multivariate_normal import MultivariateNormal
 
-from models.functions import Feedforward, InformationBottleneck, GaussianParams
+from models.functions import Feedforward, InformationBottleneck, GaussianParams, DeterministicBottleneck
 
 
 class WeightNetwork(nn.Module):
@@ -15,14 +15,14 @@ class WeightNetwork(nn.Module):
         self.decoder_dims = decoder_dims
 
         self.state_trunk = Feedforward([state_dim] + encoder_dims, out_act=F.relu)
-        self.ib = InformationBottleneck(encoder_dims[-1], bottleneck_dim, device=device)
+        self.bottleneck = InformationBottleneck(encoder_dims[-1], bottleneck_dim, device=device)
         self.goal_trunk = Feedforward([goal_dim] + encoder_dims + [bottleneck_dim])
         self.decoder = Feedforward([bottleneck_dim*2]+decoder_dims, out_act=F.sigmoid)
 
     # TODO: x, g as input
     def forward(self, x):
         g = x
-        z, kl = self.ib(self.state_trunk(x))
+        z, kl = self.bottleneck(self.state_trunk(x))
         goal_embedding = self.goal_trunk(g)
         h = torch.cat((z, goal_embedding), dim=1)
         weights = self.decoder(h)
@@ -61,13 +61,13 @@ class PrimitiveVIBPolicy(GaussianVIBPolicy):
         super(PrimitiveVIBPolicy, self).__init__()
         self.outdim = decoder_dims[-1]
         self.encoder = encoder
-        self.ib = InformationBottleneck(encoder.dims[-1], bottleneck_dim, device=device)
+        self.bottleneck = InformationBottleneck(encoder.dims[-1], bottleneck_dim, device=device)
         self.decoder = nn.Linear(bottleneck_dim, decoder_dims[0])
         self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_var=fixed_var)
 
     def forward(self, x):
         x = self.encoder(x)
-        z, kl = self.ib(x)
+        z, kl = self.bottleneck(x)
         h = F.relu(self.decoder(z))
         mu, logstd = self.parameter_producer(h)
         return mu, torch.exp(logstd), kl
@@ -105,13 +105,13 @@ class PrimitivePolicy(GaussianPolicy):
         super(PrimitivePolicy, self).__init__()
         self.outdim = decoder_dims[-1]
         self.encoder = encoder
-        self.ib = nn.Linear(encoder.dims[-1], bottleneck_dim)
+        self.bottleneck = DeterministicBottleneck(encoder.dims[-1], bottleneck_dim, device=device)
         self.decoder = nn.Linear(bottleneck_dim, decoder_dims[0])
         self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_var=fixed_var)
 
     def forward(self, x):
         x = self.encoder(x)
-        z = self.ib(x)
+        z = self.bottleneck(x)
         h = F.relu(self.decoder(z))
         mu, logstd = self.parameter_producer(h)
         return mu, torch.exp(logstd)
