@@ -20,6 +20,7 @@ import operator
 import torch.nn as nn
 import torch.nn.functional as F
 
+from collections import defaultdict
 
 
 from infra.log import create_logger
@@ -105,7 +106,7 @@ if torch.cuda.is_available():
 
 def merge_log(log_list):
     """ This is domain specific """
-    log = dict()
+    log = defaultdict(dict)
     metrics = [
         'reward_forward', 
         'reward_ctrl', 
@@ -121,7 +122,7 @@ def merge_log(log_list):
     for m in metrics:
         metric_data = [x[m] for x in log_list]
         for a in aggregators:
-            log['{}_{}'.format(a, m)] = aggregators[a](metric_data)
+            log[m][a] = aggregators[a](metric_data)
     return log
 
 class Experiment():
@@ -208,7 +209,12 @@ class Experiment():
                 args.min_batch_size, deterministic=True, render=True)
         episode_data = test_log['episode_data']
         merged_episode_data = merge_log(episode_data)
-        self.logger.pprintf(merged_episode_data)
+        # self.logger.pprintf(merged_episode_data)
+
+        # display_stats
+        self.logger.printf(display_stats(merged_episode_data))
+
+
         self.logger.printf('Test {}\tT_sample {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
         i_iter, test_log['sample_time'], test_log['min_reward'], test_log['max_reward'], test_log['avg_reward']))
         to_device(self.agent.device, self.agent.policy)
@@ -234,6 +240,7 @@ class Experiment():
             t0 = time.time()
             self.rl_alg.update_params(batch, i_iter, self.agent)
             t1 = time.time()
+            self.logger.printf(display_stats(self.rl_alg.aggregate_stats()))
 
             if should_log:
                 self.logger.printf('{}\tT_sample {:.4f}\tT_update {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
@@ -244,6 +251,17 @@ class Experiment():
 
             """clean up gpu memory"""
             torch.cuda.empty_cache()
+
+def display_stats(stats):
+    display_str = ''
+    for m in sorted(stats.keys()):
+        metric_str = '\t{}: \t\t'.format(m)
+        for a in stats[m]:
+            metric_str += '{}: {:.2f}\t'.format(a, stats[m][a])
+        metric_str = metric_str[:-2]
+        display_str += metric_str+'\n'
+    display_str = display_str[:-2]
+    return display_str
 
 def visualize_parameters(model, aString=None):
     if aString:
