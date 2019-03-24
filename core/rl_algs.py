@@ -62,7 +62,6 @@ class PPO():
             self.agent.value_optimizer.step()
 
         """update policy"""
-        # log_probs, kl, entropy = self.agent.policy.get_log_prob(states, actions)
         info = self.agent.policy.get_log_prob(states, actions)
         log_probs = info['log_prob']
         entropy = info['entropy']
@@ -74,15 +73,10 @@ class PPO():
         policy_surr = -torch.min(surr1, surr2).mean()  # mean over batch
         entropy_penalty = self.args.entropy_coeff * entropy.mean()  # mean over batch
         ib_penalty = self.args.klp * kl.mean()  # mean over batch
-        # ib_penalty = 0
-        policy_surr += ib_penalty - entropy_penalty  # maximize entropy
+        policy_loss = policy_surr + ib_penalty - entropy_penalty
         self.agent.policy_optimizer.zero_grad()
-        policy_surr.backward()
+        policy_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.agent.policy.parameters(), 40)
         self.agent.policy_optimizer.step()
-
-        """log"""
-        num_clipped = (surr1-surr2).nonzero().size(0)
-        ratio_clipped = num_clipped / states.size(0)
 
 
