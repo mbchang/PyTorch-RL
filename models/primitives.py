@@ -56,13 +56,13 @@ class PrimitivePolicy(GaussianVIBPolicy):
     """
 
     """
-    def __init__(self, encoder, ib_dims, hdim, outdim, device):
+    def __init__(self, encoder, bottleneck_dim, decoder_dims, device, fixed_var=False):
         super(PrimitivePolicy, self).__init__()
-        self.outdim = outdim
+        self.outdim = decoder_dims[-1]
         self.encoder = encoder
-        self.ib = InformationBottleneck(ib_dims[0], ib_dims[1], device=device)
-        self.decoder = nn.Linear(ib_dims[1], hdim)
-        self.parameter_producer = GaussianParams(hdim, outdim)
+        self.ib = InformationBottleneck(encoder.dims[-1], bottleneck_dim, device=device)
+        self.decoder = nn.Linear(bottleneck_dim, decoder_dims[0])
+        self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_var=fixed_var)
 
     def forward(self, x):
         x = self.encoder(x)
@@ -70,7 +70,6 @@ class PrimitivePolicy(GaussianVIBPolicy):
         h = F.relu(self.decoder(z))
         mu, logstd = self.parameter_producer(h)
         return mu, torch.exp(logstd), kl
-
 
 class CompositePolicy(GaussianVIBPolicy):
     def __init__(self, weight_network, primitives):

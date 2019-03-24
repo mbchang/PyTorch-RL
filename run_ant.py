@@ -150,10 +150,11 @@ So what is likely a better strategy is to train for 200 but test on 10000.
 3/23/19
 
 1 direction Ant primitive. With entropy and IB penalty
+Pretty unstable. Trying to lower the learning rate.
 """
 optimizer = ['adam']
-plr = [5e-5]
-clr = [5e-4]
+plr = [5e-5, 1e-5]
+clr = [5e-4, 1e-4]
 envs = ['Ant-v3']
 policy = ['primitive']
 eplen = [200]
@@ -176,7 +177,7 @@ for o, p, c, e, l, n, vw, pi in itertools.product(optimizer, plr, clr, envs, epl
     command += ' --printf'
     command += ' &'
     print(prefix + command)
-    # os.system(prefix + command)
+    os.system(prefix + command)
     i += 1
     if i >= num_gpus:
         i = 0

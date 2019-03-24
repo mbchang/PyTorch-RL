@@ -74,10 +74,14 @@ class GaussianParams(nn.Module):
     """
         h --> z
     """
-    def __init__(self, hdim, zdim, custom_init=False):
+    def __init__(self, hdim, zdim, custom_init=False, fixed_var=False):
         super(GaussianParams, self).__init__()
         self.mu = nn.Linear(hdim, zdim)
-        self.logstd = nn.Linear(hdim, zdim)
+
+        if fixed_var:
+            nn.Parameter(torch.ones(1, zdim) * np.log(0.1))
+        else:
+            self.logstd = nn.Linear(hdim, zdim)
 
         if custom_init:
             # nn.init.uniform_(self.mu.weight)

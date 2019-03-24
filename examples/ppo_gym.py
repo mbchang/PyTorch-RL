@@ -88,7 +88,8 @@ parser.add_argument('--debug', action='store_true',
                     help='debug')
 parser.add_argument('--printf', action='store_true',
                     help='printf')
-
+parser.add_argument('--fixed-var', action='store_true',
+                    help='fixed variance')
 parser.add_argument('--vwght', type=str, default='1 0',
                     help='weight for xy: 1 0 is x vel forward, 0 -1 is y vel backward')
 
@@ -221,7 +222,7 @@ class Experiment():
             should_visualize = i_iter % self.args.visualize_every == 0
 
             """generate multiple trajectories that reach the minimum batch_size"""
-            batch, log = self.agent.collect_samples(args.min_batch_size)
+            batch, log = self.agent.collect_samples(args.min_batch_size)  # here you can record the action mean and std
 
             for metric in ['min_reward', 'avg_reward', 'max_reward']:
                 self.logger.update_variable(
@@ -327,23 +328,23 @@ def main(args):
             elif args.policy == 'primitive':
                 if args.debug:
                     encoder = Feedforward([state_dim, 64, 64], out_act=F.relu)
-                    policy_net = PrimitivePolicy(encoder=encoder, ib_dims=[64, 64], hdim=64, outdim=env.action_space.shape[0], device=device)
+                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, env.action_space.shape[0]], device=device, fixed_var=args.fixed_var)
                 else:
                     # encoder = Feedforward([state_dim, 512, 256], out_act=F.relu)
-                    # policy_net = PrimitivePolicy(encoder=encoder, ib_dims=[256, 128], hdim=256, outdim=env.action_space.shape[0], device=device)
+                    # policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[256, env.action_space.shape[0]], device=device)
                     encoder = Feedforward([state_dim, 128], out_act=F.relu)
-                    policy_net = PrimitivePolicy(encoder=encoder, ib_dims=[128, 128], hdim=128, outdim=env.action_space.shape[0], device=device)
+                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, env.action_space.shape[0]], device=device)
             elif args.policy == 'composite':
                 num_primitives = 3
                 if args.debug:
                     encoders = [Feedforward([state_dim, 64, 64], out_act=F.relu) for i in range(num_primitives)]
-                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, ib_dims=[64, 64], hdim=64, outdim=env.action_space.shape[0], device=device)
+                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, bottleneck_dim=64, decoder_dims=[64, env.action_space.shape[0]], device=device)
                     weight_network = WeightNetwork(state_dim=state_dim, goal_dim=state_dim, encoder_dims=[64, 64], bottleneck_dim=64, decoder_dims=[64, num_primitives], device=device)
                     policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e) for e in encoders]))          
                 else:
                     goal_dim = 2 # TODO
                     encoders = [Feedforward([state_dim, 512, 256], out_act=F.relu) for i in range(num_primitives)]
-                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, ib_dims=[256, 128], hdim=256, outdim=env.action_space.shape[0], device=device)
+                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, bottleneck_dim=128, decoder_dims=[256, env.action_space.shape[0]], device=device)
                     weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[512, 256], bottleneck_dim=128, decoder_dims=[256, num_primitives], device=device)
                     policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e) for e in encoders]))      
             else:
