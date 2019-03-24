@@ -25,7 +25,6 @@ class PPO():
         masks = torch.from_numpy(np.stack(batch.mask)).to(self.dtype).to(self.device)
         with torch.no_grad():
             values = self.agent.valuefn(states)
-            # fixed_log_probs, _, _ = self.agent.policy.get_log_prob(states, actions)
             info = self.agent.policy.get_log_prob(states, actions)
             fixed_log_probs = info['log_prob']
 
