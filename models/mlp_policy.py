@@ -2,6 +2,9 @@ import torch.nn as nn
 import torch
 from utils.math import *
 
+from torch.distributions.multivariate_normal import MultivariateNormal
+
+
 
 class Policy(nn.Module):
     def __init__(self, state_dim, action_dim, hidden_size=(128, 128), activation='relu', log_std=0):
@@ -54,8 +57,12 @@ class Policy(nn.Module):
         return kl.sum(1, keepdim=True)
 
     def get_log_prob(self, x, actions):
+        bsize = x.size(0)
         action_mean, action_log_std, action_std = self.forward(x)
-        return normal_log_density(actions, action_mean, action_log_std, action_std)
+        log_prob = normal_log_density(actions, action_mean, action_log_std, action_std)
+        dist = MultivariateNormal(loc=action_mean, scale_tril=torch.diag_embed(action_std))
+        entropy = dist.entropy().view(bsize, 1)
+        return {'log_prob': log_prob, 'entropy': entropy}
 
     def get_fim(self, x):
         mean, _, _ = self.forward(x)

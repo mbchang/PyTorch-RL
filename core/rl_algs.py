@@ -26,8 +26,8 @@ class PPO():
         with torch.no_grad():
             values = self.agent.valuefn(states)
             # fixed_log_probs, _, _ = self.agent.policy.get_log_prob(states, actions)
-            fixed_log_probs, _ = self.agent.policy.get_log_prob(states, actions)
-            # fixed_log_probs = self.agent.policy.get_log_prob(states, actions)
+            info = self.agent.policy.get_log_prob(states, actions)
+            fixed_log_probs = info['log_prob']
 
         """get advantage estimation from the trajectories"""
         advantages, returns = estimate_advantages(rewards, masks, values, self.args.gamma, self.args.tau, self.device)
@@ -64,8 +64,10 @@ class PPO():
 
         """update policy"""
         # log_probs, kl, entropy = self.agent.policy.get_log_prob(states, actions)
-        log_probs, entropy = self.agent.policy.get_log_prob(states, actions)
-        # log_probs = self.agent.policy.get_log_prob(states, actions)
+        info = self.agent.policy.get_log_prob(states, actions)
+        log_probs = info['log_prob']
+        entropy = info['entropy']
+
         ratio = torch.exp(log_probs - fixed_log_probs)
         surr1 = ratio * advantages
         surr2 = torch.clamp(ratio, 1.0 - self.args.clip_epsilon, 1.0 + self.args.clip_epsilon) * advantages

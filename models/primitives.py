@@ -46,12 +46,13 @@ class GaussianVIBPolicy(nn.Module):
             return action
 
     def get_log_prob(self, state, action):
-        mu, std, kl = self.forward(state)
-        dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
-        log_prob = dist.log_prob(action)  # keep dims=True
-        entropy = dist.entropy()  # keep
         bsize = state.size(0)
-        return log_prob.view(bsize, 1), kl.view(bsize, 1), entropy.view(bsize, 1)
+        mu, std, kl = self.forward(state)
+        kl = kl.view(bsize, 1)
+        dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
+        log_prob = dist.log_prob(action).view(bsize, 1)
+        entropy = dist.entropy().view(bsize, 1)
+        return {'log_prob': log_prob, 'kl': kl, 'entropy': entropy}
 
 class PrimitiveVIBPolicy(GaussianVIBPolicy):
     """
@@ -90,12 +91,12 @@ class GaussianPolicy(nn.Module):
             return action
 
     def get_log_prob(self, state, action):
+        bsize = state.size(0)
         mu, std = self.forward(state)
         dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
-        log_prob = dist.log_prob(action)  # keep dims=True
-        entropy = dist.entropy()  # keep
-        bsize = state.size(0)
-        return log_prob.view(bsize, 1), entropy.view(bsize, 1)
+        log_prob = dist.log_prob(action).view(bsize, 1)
+        entropy = dist.entropy().view(bsize, 1)
+        return {'log_prob': log_prob, 'entropy': entropy}
 
 class PrimitivePolicy(GaussianPolicy):
     """
