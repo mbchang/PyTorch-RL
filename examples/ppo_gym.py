@@ -10,12 +10,16 @@ from utils import *
 from models.mlp_policy import Policy
 from models.mlp_critic import Value
 from models.mlp_policy_disc import DiscretePolicy
-from models.primitives import Encoder, PrimitivePolicy
+from models.primitives import Feedforward, PrimitivePolicy, CompositePolicy, WeightNetwork
 from core.agent import Agent
 
 from moviepy.editor import ImageSequenceClip
 import copy
 import operator
+
+import torch.nn as nn
+import torch.nn.functional as F
+
 
 
 from infra.log import create_logger
@@ -312,11 +316,27 @@ def main(args):
             if args.policy == 'vanilla':
                 policy_net = Policy(state_dim, env.action_space.shape[0], log_std=args.log_std)
             elif args.policy == 'primitive':
-                encoder = Encoder([state_dim, 512, 256])
-                policy_net = PrimitivePolicy(encoder=encoder, ib_dims=[256, 128], hdim=256, outdim=env.action_space.shape[0], device=device)
+                if args.debug:
+                    encoder = Feedforward([state_dim, 64, 64], out_act=F.relu)
+                    policy_net = PrimitivePolicy(encoder=encoder, ib_dims=[64, 64], hdim=64, outdim=env.action_space.shape[0], device=device)
+                else:
+                    encoder = Feedforward([state_dim, 512, 256], out_act=F.relu)
+                    policy_net = PrimitivePolicy(encoder=encoder, ib_dims=[256, 128], hdim=256, outdim=env.action_space.shape[0], device=device)
+            elif args.policy == 'composite':
+                num_primitives = 3
+                if args.debug:
+                    encoders = [Feedforward([state_dim, 64, 64], out_act=F.relu) for i in range(num_primitives)]
+                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, ib_dims=[64, 64], hdim=64, outdim=env.action_space.shape[0], device=device)
+                    weight_network = WeightNetwork(state_dim=state_dim, goal_dim=state_dim, encoder_dims=[64, 64], bottleneck_dim=64, decoder_dims=[64, num_primitives], device=device)
+                    policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e) for e in encoders]))          
+                else:
+                    goal_dim = 2 # TODO
+                    encoders = [Feedforward([state_dim, 512, 256], out_act=F.relu) for i in range(num_primitives)]
+                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, ib_dims=[256, 128], hdim=256, outdim=env.action_space.shape[0], device=device)
+                    weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[512, 256], bottleneck_dim=128, decoder_dims=[256, num_primitives], device=device)
+                    policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e) for e in encoders]))      
             else:
                 False
-
         value_net = Value(state_dim)
     ######################################################
     # TODO verify that this works

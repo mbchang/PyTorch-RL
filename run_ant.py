@@ -176,7 +176,7 @@ for o, p, c, e, l, n, vw, pi in itertools.product(optimizer, plr, clr, envs, epl
     command += ' --printf'
     command += ' &'
     print(prefix + command)
-    os.system(prefix + command)
+    # os.system(prefix + command)
     i += 1
     if i >= num_gpus:
         i = 0
