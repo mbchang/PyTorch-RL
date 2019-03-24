@@ -22,7 +22,6 @@ import torch.nn.functional as F
 
 from collections import defaultdict
 
-
 from infra.log import create_logger
 from core.rl_algs import PPO
 
@@ -209,12 +208,7 @@ class Experiment():
                 args.min_batch_size, deterministic=True, render=True)
         episode_data = test_log['episode_data']
         merged_episode_data = merge_log(episode_data)
-        # self.logger.pprintf(merged_episode_data)
-
-        # display_stats
         self.logger.printf(display_stats(merged_episode_data))
-
-
         self.logger.printf('Test {}\tT_sample {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
         i_iter, test_log['sample_time'], test_log['min_reward'], test_log['max_reward'], test_log['avg_reward']))
         to_device(self.agent.device, self.agent.policy)
