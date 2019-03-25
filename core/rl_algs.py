@@ -81,7 +81,6 @@ class PPO():
 
                 minibatch_log = self.ppo_step(states_b, actions_b, returns_b, advantages_b, fixed_log_probs_b)
                 self.record(minibatch_log=minibatch_log, epoch=j, iter=i)
-        # self.aggregate_stats()
 
     def ppo_step(self, states, actions, returns, advantages, fixed_log_probs):
 
