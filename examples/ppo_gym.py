@@ -335,22 +335,7 @@ def initialize_environment(args):
     make_renderer_track_agent(env)
     return env, state_dim, is_disc_action
 
-def main(args):
-    args = process_args(args)
-    logger = create_logger(build_expname, args)
-    initialize_logger(logger)
-
-    """environment"""
-    env, state_dim, is_disc_action = initialize_environment(args)
-
-    """seeding"""
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    env.seed(args.seed)
-
-    running_state = ZFilter((state_dim,), clip=5)
-    # running_reward = ZFilter((1,), demean=False, clip=10)
-
+def initialize_actor_critic(env, state_dim, is_disc_action, device):
     """define actor and critic"""
     if args.model_path is None:
         if is_disc_action:
@@ -370,15 +355,15 @@ def main(args):
             elif args.policy == 'composite':
                 num_primitives = 3
                 if args.debug:
-                    encoders = [Feedforward([state_dim, 64, 64], out_act=F.relu) for i in range(num_primitives)]
+                    encoders = [Feedforward([state_dim, 64], out_act=F.relu) for i in range(num_primitives)]
                     primitive_builder = lambda e: PrimitivePolicy(encoder=e, bottleneck_dim=64, decoder_dims=[64, env.action_space.shape[0]], device=device)
-                    weight_network = WeightNetwork(state_dim=state_dim, goal_dim=state_dim, encoder_dims=[64, 64], bottleneck_dim=64, decoder_dims=[64, num_primitives], device=device)
+                    weight_network = WeightNetwork(state_dim=state_dim, goal_dim=state_dim, encoder_dims=[64], bottleneck_dim=64, decoder_dims=[64, num_primitives], device=device)
                     policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e) for e in encoders]))          
                 else:
-                    goal_dim = 2 # TODO
-                    encoders = [Feedforward([state_dim, 512, 256], out_act=F.relu) for i in range(num_primitives)]
-                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, bottleneck_dim=128, decoder_dims=[256, env.action_space.shape[0]], device=device)
-                    weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[512, 256], bottleneck_dim=128, decoder_dims=[256, num_primitives], device=device)
+                    goal_dim = state_dim
+                    encoders = [Feedforward([state_dim, 128], out_act=F.relu) for i in range(num_primitives)]
+                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, bottleneck_dim=128, decoder_dims=[128, env.action_space.shape[0]], device=device)
+                    weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[128], bottleneck_dim=128, decoder_dims=[128, num_primitives], device=device)
                     policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e) for e in encoders]))      
             else:
                 False
@@ -395,6 +380,27 @@ def main(args):
     #######################################################
     policy_net.to(device)
     value_net.to(device)
+    return policy_net, value_net
+
+
+def main(args):
+    args = process_args(args)
+    logger = create_logger(build_expname, args)
+    initialize_logger(logger)
+
+    """environment"""
+    env, state_dim, is_disc_action = initialize_environment(args)
+
+    """seeding"""
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    env.seed(args.seed)
+
+    running_state = ZFilter((state_dim,), clip=5)
+    # running_reward = ZFilter((1,), demean=False, clip=10)
+
+    # """define actor and critic"""
+    policy_net, value_net = initialize_actor_critic(env, state_dim, is_disc_action, device)
 
     """create agent"""
     agent = Agent(env, policy_net, value_net, device, args, running_state=running_state, num_threads=args.num_threads)
