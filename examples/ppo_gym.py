@@ -252,26 +252,26 @@ def display_stats(stats):
     aggregate_keys = list(stats[metrics[0]].keys())
     num_aggregates = len(aggregate_keys)
     agg_label_length = max(len(x) for x in stats[metrics[0]]) + 3
-    value_length = 7
     ###############################################################
+    value_length = 7
     pad = 2
     lefter_width = pad + max_metric_length + pad
     column_width = pad + agg_label_length + value_length + pad
-    border_length = lefter_width + (column_width+1)*num_aggregates+3
+    border_length = lefter_width + (column_width+1)*num_aggregates + 3
     ###############################################################
     doubledash = '=' * border_length
     dash = '-' * border_length
     display_str = '{}\n'.format(doubledash)
-    header_str = '|{:^{}s} '.format('', lefter_width)
+    header_str = '|{:^{width}s} '.format('', width=lefter_width)
     for a in aggregate_keys:
-        header_str += '|{:^{}}'.format(a, column_width)
+        header_str += '|{:^{width}}'.format(a, width=column_width)
     display_str += header_str +'|'
     display_str += '\n{}\n'.format(dash)
     ###############################################################
     for m in sorted(stats.keys()):
-        metric_str = '|{:^{}s} '.format(m, lefter_width)
+        metric_str = '|{:^{width}s} '.format(m, width=lefter_width)
         for a in stats[m]:
-            metric_str += '|{:^{}.2f}'.format(stats[m][a], column_width)
+            metric_str += '|{:^{width}.2f}'.format(stats[m][a], width=column_width)
         display_str += metric_str+'|\n'
     ###############################################################
     display_str += doubledash
