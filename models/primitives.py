@@ -8,14 +8,15 @@ from models.functions import Feedforward, InformationBottleneck, GaussianParams,
 
 
 class WeightNetwork(nn.Module):
-    def __init__(self, state_dim, goal_dim, encoder_dims, bottleneck_dim, decoder_dims, device):
+    def __init__(self, state_dim, goal_dim, encoder_dims, bottleneck_dim, decoder_dims, device, vib=False):
         super(WeightNetwork, self).__init__()
         self.encoder_dims = encoder_dims
         self.bottleneck_dim = bottleneck_dim
         self.decoder_dims = decoder_dims
 
         self.state_trunk = Feedforward([state_dim] + encoder_dims, out_act=F.relu)
-        self.bottleneck = InformationBottleneck(encoder_dims[-1], bottleneck_dim, device=device)
+        bottleneck = InformationBottleneck if vib else DeterministicBottleneck
+        self.bottleneck = bottleneck(encoder_dims[-1], bottleneck_dim, device=device)
         self.goal_trunk = Feedforward([goal_dim] + encoder_dims + [bottleneck_dim])
         self.decoder = Feedforward([bottleneck_dim*2]+decoder_dims, out_act=F.sigmoid)
 

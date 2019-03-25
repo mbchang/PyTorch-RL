@@ -151,17 +151,54 @@ So what is likely a better strategy is to train for 200 but test on 10000.
 
 1 direction Ant primitive. With entropy and IB penalty
 Pretty unstable. Trying to lower the learning rate.
+# seems like 1e-5 and 1e-4 learns the most stably
+"""
+# optimizer = ['adam']
+# plr = [5e-5, 1e-5]
+# clr = [5e-4, 1e-4]
+# envs = ['Ant-v3']
+# policy = ['primitive']
+# eplen = [200]
+# numtest = [100]
+# vweights = ['1 0']
+
+# outputdir = 'runs/ant_test_optimizer_lr_prim_eib'
+
+# gpu = True
+# num_gpus = 2
+# i = 0
+
+# if gpu:
+#     os.system('export OMP_NUM_THREADS=1')
+
+# for o, p, c, e, l, n, vw, pi in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy):
+#     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+#     command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {}'.format(o, p, c, e, l, n, vw, pi)
+#     command += ' --outputdir {}'.format(outputdir)
+#     command += ' --printf'
+#     command += ' &'
+#     print(prefix + command)
+#     os.system(prefix + command)
+#     i += 1
+#     if i >= num_gpus:
+#         i = 0
+
+
+"""
+3/23/19
+
+1 direction Ant composite deterministic.
 """
 optimizer = ['adam']
-plr = [5e-5, 1e-5]
+plr = [1e-5]
 clr = [5e-4, 1e-4]
 envs = ['Ant-v3']
-policy = ['primitive']
+policy = ['composite']
 eplen = [200]
 numtest = [100]
 vweights = ['1 0']
 
-outputdir = 'runs/ant_test_optimizer_lr_prim_eib'
+outputdir = 'runs/ant_test_optimizer_lr_compdet'
 
 gpu = True
 num_gpus = 2
