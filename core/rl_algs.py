@@ -97,7 +97,6 @@ class PPO():
             self.agent.value_optimizer.step()
 
         """update policy"""
-        # log_probs, kl, entropy = self.agent.policy.get_log_prob(states, actions)
         info = self.agent.policy.get_log_prob(states, actions)
         log_probs = info['log_prob']
         entropy = info['entropy']

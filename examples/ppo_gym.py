@@ -247,15 +247,36 @@ class Experiment():
             torch.cuda.empty_cache()
 
 def display_stats(stats):
-    display_str = ''
+    metrics = list(stats.keys())
+    max_metric_length = max(len(x) for x in metrics)
+    aggregate_keys = list(stats[metrics[0]].keys())
+    num_aggregates = len(aggregate_keys)
+    agg_label_length = max(len(x) for x in stats[metrics[0]]) + 3
+    value_length = 7
+    ###############################################################
+    pad = 2
+    lefter_width = pad + max_metric_length + pad
+    column_width = pad + agg_label_length + value_length + pad
+    border_length = lefter_width + (column_width+1)*num_aggregates+3
+    ###############################################################
+    doubledash = '=' * border_length
+    dash = '-' * border_length
+    display_str = '{}\n'.format(doubledash)
+    header_str = '|{:^{}s} '.format('', lefter_width)
+    for a in aggregate_keys:
+        header_str += '|{:^{}}'.format(a, column_width)
+    display_str += header_str +'|'
+    display_str += '\n{}\n'.format(dash)
+    ###############################################################
     for m in sorted(stats.keys()):
-        metric_str = '\t{}: \t\t'.format(m)
+        metric_str = '|{:^{}s} '.format(m, lefter_width)
         for a in stats[m]:
-            metric_str += '{}: {:.2f}\t'.format(a, stats[m][a])
-        metric_str = metric_str[:-2]
-        display_str += metric_str+'\n'
-    display_str = display_str[:-2]
+            metric_str += '|{:^{}.2f}'.format(stats[m][a], column_width)
+        display_str += metric_str+'|\n'
+    ###############################################################
+    display_str += doubledash
     return display_str
+
 
 def visualize_parameters(model, aString=None):
     if aString:
