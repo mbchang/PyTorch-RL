@@ -1,30 +1,29 @@
 import argparse
+from collections import defaultdict
+import copy
 import gym
+from moviepy.editor import ImageSequenceClip
+import operator
 import os
 import sys
 import pickle
 import time
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+import torch.nn as nn
+import torch.nn.functional as F
 
-from utils import *
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from core.agent import Agent
+from core.rl_algs import PPO
+from infra.log import create_logger
 from models.mlp_policy import Policy
 from models.mlp_critic import Value
 from models.mlp_policy_disc import DiscretePolicy
 from models.primitives import Feedforward, CompositePolicy, WeightNetwork, PrimitivePolicy
-from core.agent import Agent
+from utils import *
 
-from moviepy.editor import ImageSequenceClip
-import copy
-import operator
-
-import torch.nn as nn
-import torch.nn.functional as F
-
-from collections import defaultdict
-
-from infra.log import create_logger
-from core.rl_algs import PPO
-
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+from rlkit.envs.wrappers import NormalizedBoxEnv
+from rlkit.torch.tdm.envs.ant_env import GoalXYPosAnt
 
 parser = argparse.ArgumentParser(description='PyTorch PPO example')
 parser.add_argument('--env-name', default="Hopper-v2", metavar='G',
@@ -104,19 +103,9 @@ if torch.cuda.is_available():
     os.system('export OMP_NUM_THREADS=1')
 
 def merge_log(log_list):
-    """ This is domain specific """
+    metrics = list(log_list[0].keys())
+    metrics.remove('frame')
     log = defaultdict(dict)
-    metrics = [
-        'reward_forward', 
-        'reward_ctrl', 
-        'reward_contact', 
-        'reward_survive', 
-        'x_position', 
-        'y_position', 
-        'distance_from_origin',
-        'x_velocity',
-        'y_velocity',
-        'reward_total']
     aggregators = {'total': np.sum, 'avg': np.mean, 'max': np.max, 'min': np.min, 'std': np.std}
     for m in metrics:
         metric_data = [x[m] for x in log_list]
@@ -321,7 +310,12 @@ def process_args(args):
     return args
 
 def make_renderer_track_agent(env):
-    viewer = env.env._get_viewer('rgb_array')
+    if type(env) == NormalizedBoxEnv:
+        viewer = env.wrapped_env._get_viewer('rgb_array')
+    elif type(env) == gym.wrappers.time_limit.TimeLimit:
+        viewer = env.env._get_viewer('rgb_array')
+    else:
+        assert False
     viewer.cam.type = 1
     viewer.cam.trackbodyid = 0
 
@@ -330,6 +324,7 @@ def initialize_environment(args):
     xw, yw = map(int, vw_str.split())
     vw = {'x': xw, 'y': yw}
     env = gym.make(args.env_name, velocity_weight=vw)
+    # env = NormalizedBoxEnv(GoalXYPosAnt(max_distance=6))
     state_dim = env.observation_space.shape[0]
     is_disc_action = len(env.action_space.shape) == 0
     make_renderer_track_agent(env)
