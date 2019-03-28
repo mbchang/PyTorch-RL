@@ -41,7 +41,7 @@ class PPO():
     def aggregate_stats(self):
         stats = defaultdict(dict)
         aggregators = {'avg': np.mean, 'max': np.max, 'min': np.min, 'std': np.std}
-        for m in ['num_clipped', 'ratio_clipped', 'kl', 'value_loss', 'policy_surr', 'policy_loss']:
+        for m in ['num_clipped', 'ratio_clipped', 'kl', 'value_loss', 'policy_surr', 'policy_loss', 'entropy']:
             metric_data = []
             for e in self.log:
                 epoch_metric_data = [v[m] for k, v in self.log[e].items()]

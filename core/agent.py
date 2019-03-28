@@ -7,7 +7,7 @@ import time
 import torch.optim as optim
 import copy
 
-
+# This thing should just take in a policy and environment and just run it.
 def sample_single_trajectory(env, policy, custom_reward, mean_action, render, running_state, maxeplen, memory):
     state = env.reset()
     if running_state is not None:
@@ -51,7 +51,8 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
     assert np.allclose(reward_episode, np.sum([e['reward_total'] for e in episode_data]))
     return episode_data, t
 
-
+# This thing should just take in a policy and environment and just run it.
+# Could I imagine calling this for the primitives?
 def collect_samples(pid, queue, env, policy, custom_reward, mean_action, render, running_state, min_batch_size, maxeplen):
     torch.randn(pid)
     log = dict()
