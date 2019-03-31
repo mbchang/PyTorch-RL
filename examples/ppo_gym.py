@@ -24,6 +24,7 @@ from utils import *
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
 from rlkit.envs.wrappers import NormalizedBoxEnv
 from rlkit.torch.tdm.envs.ant_env import GoalXYPosAnt
+from rlkit.torch.tdm.envs.multitask_env import MultitaskToFlatEnv
 
 parser = argparse.ArgumentParser(description='PyTorch PPO example')
 parser.add_argument('--env-name', default="Hopper-v2", metavar='G',
@@ -40,10 +41,10 @@ parser.add_argument('--tau', type=float, default=0.95, metavar='G',
                     help='gae (default: 0.95)')
 parser.add_argument('--l2-reg', type=float, default=1e-3, metavar='G',
                     help='l2 regularization regression (default: 1e-3)')
-parser.add_argument('--plr', type=float, default=4e-5, metavar='G',
-                    help='policy learning rate (default: 4e-5)')
-parser.add_argument('--clr', type=float, default=5e-3, metavar='G',
-                    help='critic learning rate (default: 5e-3)')
+parser.add_argument('--plr', type=float, default=1e-5, metavar='G',
+                    help='policy learning rate (default: 1e-5)')
+parser.add_argument('--clr', type=float, default=1e-4, metavar='G',
+                    help='critic learning rate (default: 1e-4)')
 parser.add_argument('--clip-epsilon', type=float, default=0.2, metavar='N',
                     help='clipping epsilon for PPO')
 parser.add_argument('--num-threads', type=int, default=1, metavar='N',
@@ -91,6 +92,8 @@ parser.add_argument('--fixed-var', action='store_true',
                     help='fixed variance')
 parser.add_argument('--vwght', type=str, default='1 0',
                     help='weight for xy: 1 0 is x vel forward, 0 -1 is y vel backward')
+parser.add_argument('--goal-dist', type=float, default=1,
+                    help='goal distance (default: 1)')
 
 
 args = parser.parse_args()
@@ -104,7 +107,8 @@ if torch.cuda.is_available():
 
 def merge_log(log_list):
     metrics = list(log_list[0].keys())
-    metrics.remove('frame')
+    if 'frame' in log_list:
+        metrics.remove('frame')
     log = defaultdict(dict)
     aggregators = {'total': np.sum, 'avg': np.mean, 'max': np.max, 'min': np.min, 'std': np.std}
     for m in metrics:
@@ -226,8 +230,11 @@ class Experiment():
             self.logger.printf(display_stats(self.rl_alg.aggregate_stats()))
 
             if should_log:
-                self.logger.printf('{}\tT_sample {:.4f}\tT_update {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
-                    i_iter, log['sample_time'], t1-t0, log['min_reward'], log['max_reward'], log['avg_reward']))
+                episode_data = log['episode_data']
+                merged_episode_data = merge_log(episode_data)
+                self.logger.printf(display_stats(merged_episode_data))
+                self.logger.printf('{}\tT_sample {:.4f}\tT_update {:.4f}'.format(
+                    i_iter, log['sample_time'], t1-t0))
 
             if should_save:
                 self.save(i_iter)
@@ -260,7 +267,7 @@ def display_stats(stats):
     for m in sorted(stats.keys()):
         metric_str = '|{:^{width}s} '.format(m, width=lefter_width)
         for a in stats[m]:
-            metric_str += '|{:^{width}.2f}'.format(stats[m][a], width=column_width)
+            metric_str += '|{:^{width}.4f}'.format(stats[m][a], width=column_width)
         display_str += metric_str+'|\n'
     ###############################################################
     display_str += doubledash
@@ -285,6 +292,7 @@ def build_expname(args):
     expname += '_ntest-{}'.format(args.num_test)
     expname += '_vw-{}'.format(args.vwght.replace(' ', ''))
     expname += '_p-{}'.format(args.policy)
+    expname += '_gd-{}'.format(args.goal_dist)
     if args.debug: expname+= '_debug'
     return expname
 
@@ -301,7 +309,7 @@ def initialize_logger(logger):
 def process_args(args):
     if args.debug:
         args.maxeplen = 100
-        args.max_iter_num = 5
+        args.max_iter_num = 10
         args.save_every = 1
         args.visualize_every = 5
         args.min_batch_size = 128
@@ -309,55 +317,69 @@ def process_args(args):
         args.num_test = 5
     return args
 
-def make_renderer_track_agent(env):
+def make_renderer_track_agent(env, args):
     if type(env) == NormalizedBoxEnv:
         viewer = env.wrapped_env._get_viewer('rgb_array')
+    elif type(env) == MultitaskToFlatEnv:
+        viewer = env.wrapped_env.wrapped_env._get_viewer('rgb_array')
     elif type(env) == gym.wrappers.time_limit.TimeLimit:
         viewer = env.env._get_viewer('rgb_array')
     else:
         assert False
     viewer.cam.type = 1
     viewer.cam.trackbodyid = 0
+    viewer.cam.distance = max(4, 1.5*args.goal_dist+2)
 
 def initialize_environment(args):
     vw_str = args.vwght
     xw, yw = map(int, vw_str.split())
     vw = {'x': xw, 'y': yw}
-    env = gym.make(args.env_name, velocity_weight=vw)
-    # env = NormalizedBoxEnv(GoalXYPosAnt(max_distance=6))
+    ######################################################
+    env = gym.make(args.env_name, velocity_weight=vw, goal_distance=args.goal_dist)
+    ######################################################
+    # env = NormalizedBoxEnv(GoalXYPosAnt(max_distance=1))
+    # env = MultitaskToFlatEnv(env)
+    # assert False
+    ######################################################
     state_dim = env.observation_space.shape[0]
     is_disc_action = len(env.action_space.shape) == 0
-    make_renderer_track_agent(env)
+    make_renderer_track_agent(env, args)
     return env, state_dim, is_disc_action
 
 def initialize_actor_critic(env, state_dim, is_disc_action, device):
+    action_dim = env.action_space.n if is_disc_action else env.action_space.shape[0]
+    # print('state dim', state_dim)
+    # print('action_dim', action_dim)
+    # assert False
+
     """define actor and critic"""
     if args.model_path is None:
         if is_disc_action:
-            policy_net = DiscretePolicy(state_dim, env.action_space.n)
+            policy_net = DiscretePolicy(state_dim, action_dim)
         else:
+
             if args.policy == 'vanilla':
-                policy_net = Policy(state_dim, env.action_space.shape[0], log_std=args.log_std)
+                policy_net = Policy(state_dim, action_dim, log_std=args.log_std)
             elif args.policy == 'primitive':
                 if args.debug:
                     encoder = Feedforward([state_dim, 64, 64], out_act=F.relu)
-                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, env.action_space.shape[0]], device=device, fixed_var=args.fixed_var, vib=False)
+                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, fixed_var=args.fixed_var, vib=False)
                 else:
                     # encoder = Feedforward([state_dim, 512, 256], out_act=F.relu)
-                    # policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[256, env.action_space.shape[0]], device=device)
+                    # policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[256, action_dim], device=device)
                     encoder = Feedforward([state_dim, 128], out_act=F.relu)
-                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, env.action_space.shape[0]], device=device)
+                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device)
             elif args.policy == 'composite':
                 num_primitives = 3
                 if args.debug:
                     encoders = [Feedforward([state_dim, 64], out_act=F.relu) for i in range(num_primitives)]
-                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, bottleneck_dim=64, decoder_dims=[64, env.action_space.shape[0]], device=device)
+                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device)
                     weight_network = WeightNetwork(state_dim=state_dim, goal_dim=state_dim, encoder_dims=[64], bottleneck_dim=64, decoder_dims=[64, num_primitives], device=device)
                     policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e) for e in encoders]))          
                 else:
                     goal_dim = state_dim
                     encoders = [Feedforward([state_dim, 128], out_act=F.relu) for i in range(num_primitives)]
-                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, bottleneck_dim=128, decoder_dims=[128, env.action_space.shape[0]], device=device)
+                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device)
                     weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[128], bottleneck_dim=128, decoder_dims=[128, num_primitives], device=device)
                     policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e) for e in encoders]))      
             else:

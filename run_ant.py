@@ -189,16 +189,56 @@ Pretty unstable. Trying to lower the learning rate.
 
 1 direction Ant composite deterministic.
 """
+# optimizer = ['adam']
+# plr = [1e-5]
+# clr = [5e-4, 1e-4]
+# envs = ['Ant-v3']
+# policy = ['composite']
+# eplen = [200]
+# numtest = [100]
+# vweights = ['1 0']
+
+# outputdir = 'runs/ant_test_optimizer_lr_compdet'
+
+# gpu = True
+# num_gpus = 2
+# i = 0
+
+# if gpu:
+#     os.system('export OMP_NUM_THREADS=1')
+
+# for o, p, c, e, l, n, vw, pi in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy):
+#     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+#     command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {}'.format(o, p, c, e, l, n, vw, pi)
+#     command += ' --outputdir {}'.format(outputdir)
+#     command += ' --printf'
+#     command += ' &'
+#     print(prefix + command)
+#     os.system(prefix + command)
+#     i += 1
+#     if i >= num_gpus:
+#         i = 0
+
+
+"""
+3/28/19
+
+1 goal Ant primitive deterministic.
+
+3/31/19
+Running it again, but this time add a constant to the reward.
+"""
 optimizer = ['adam']
 plr = [1e-5]
-clr = [5e-4, 1e-4]
+clr = [1e-4, 1e-5]
 envs = ['Ant-v3']
-policy = ['composite']
+policy = ['primitive']
 eplen = [200]
 numtest = [100]
 vweights = ['1 0']
+goal_dist = [10]
 
-outputdir = 'runs/ant_test_optimizer_lr_compdet'
+outputdir = 'runs/ant_test_optimizer_lr_gd_const'
 
 gpu = True
 num_gpus = 2
@@ -207,9 +247,9 @@ i = 0
 if gpu:
     os.system('export OMP_NUM_THREADS=1')
 
-for o, p, c, e, l, n, vw, pi in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy):
+for o, p, c, e, l, n, vw, pi, gd in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy, goal_dist):
     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
-    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {}'.format(o, p, c, e, l, n, vw, pi)
+    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {} --goal-dist {}'.format(o, p, c, e, l, n, vw, pi, gd)
     command += ' --outputdir {}'.format(outputdir)
     command += ' --printf'
     command += ' &'
@@ -218,3 +258,4 @@ for o, p, c, e, l, n, vw, pi in itertools.product(optimizer, plr, clr, envs, epl
     i += 1
     if i >= num_gpus:
         i = 0
+

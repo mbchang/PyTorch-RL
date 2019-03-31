@@ -9,6 +9,13 @@ import copy
 
 # This thing should just take in a policy and environment and just run it.
 def sample_single_trajectory(env, policy, custom_reward, mean_action, render, running_state, maxeplen, memory):
+
+    ######################################################
+    # if render:
+    #     goal = env.sample_goal_for_rollout()
+    #     env.set_goal(goal)
+    ######################################################
+
     state = env.reset()
     if running_state is not None:
         state = running_state(state)
@@ -48,6 +55,8 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
 
         state = next_state
 
+    # print(reward_episode)
+    # print(np.sum([e['reward_total'] for e in episode_data]))
     assert np.allclose(reward_episode, np.sum([e['reward_total'] for e in episode_data]))
     return episode_data, t
 
@@ -96,8 +105,8 @@ def collect_samples(pid, queue, env, policy, custom_reward, mean_action, render,
         log['max_c_reward'] = max_c_reward
         log['min_c_reward'] = min_c_reward
 
-    if render:
-        log['episode_data'] = best_episode_data
+    # if render:
+    log['episode_data'] = best_episode_data
  
     if queue is not None:
         queue.put([pid, memory, log])
