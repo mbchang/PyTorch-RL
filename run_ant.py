@@ -238,7 +238,7 @@ numtest = [100]
 vweights = ['1 0']
 goal_dist = [10]
 
-outputdir = 'runs/ant_test_optimizer_lr_gd_const'
+outputdir = 'runs/ant_test_optimizer_lr_gd_const_blog'
 
 gpu = True
 num_gpus = 2
@@ -259,3 +259,43 @@ for o, p, c, e, l, n, vw, pi, gd in itertools.product(optimizer, plr, clr, envs,
     if i >= num_gpus:
         i = 0
 
+
+# """
+# 3/31/19
+
+# normalized rewards
+# """
+# optimizer = ['adam']
+# plr = [1e-5]
+# clr = [1e-4]
+# envs = ['Ant-v3']
+# policy = ['primitive']
+# eplen = [200]
+# numtest = [100]
+# vweights = ['1 0']
+
+# control_weight = [0.1, 1]
+# contact_weight = [0.01, 0.001]
+# healthy_weight = [1,2]
+# task_weight = [5, 10, 15]
+
+# outputdir = 'runs/ant_test_optimizer_normalized_vel'
+
+# gpu = True
+# num_gpus = 6
+# i = 0
+
+# if gpu:
+#     os.system('export OMP_NUM_THREADS=1')
+
+# for o, p, c, e, l, n, vw, pi, ctrl_wt, cnct_wt, h_wt, t_wt in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy, control_weight, contact_weight, healthy_weight, task_weight):
+#     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+#     command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {} --control-weight {} --contact-weight {} --healthy-weight {} --task-weight {}'.format(o, p, c, e, l, n, vw, pi, ctrl_wt, cnct_wt, h_wt, t_wt)
+#     command += ' --outputdir {}'.format(outputdir)
+#     command += ' --printf'
+#     command += ' &'
+#     print(prefix + command)
+#     # os.system(prefix + command)
+#     i += 1
+#     if i >= num_gpus:
+#         i = 0

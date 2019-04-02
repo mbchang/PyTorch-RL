@@ -55,8 +55,6 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
 
         state = next_state
 
-    # print(reward_episode)
-    # print(np.sum([e['reward_total'] for e in episode_data]))
     assert np.allclose(reward_episode, np.sum([e['reward_total'] for e in episode_data]))
     return episode_data, t
 
@@ -76,6 +74,8 @@ def collect_samples(pid, queue, env, policy, custom_reward, mean_action, render,
     num_episodes = 0
 
     best_episode_data = []
+    worst_episode_data = []
+    # avg_episode_data = []
 
     while num_steps < min_batch_size:
         episode_data, t = sample_single_trajectory(env, policy, custom_reward, mean_action, render, running_state, maxeplen, memory)
@@ -88,7 +88,10 @@ def collect_samples(pid, queue, env, policy, custom_reward, mean_action, render,
         total_reward += reward_episode
 
         if reward_episode > max_reward:
-            best_episode_data = copy.deepcopy(episode_data)
+            best_episode_data = copy.deepcopy(episode_data)  # actually if you are not rendering you should just get the average.
+
+        if reward_episode < min_reward:
+            worst_episode_data = copy.deepcopy(episode_data)
 
         min_reward = min(min_reward, reward_episode)
         max_reward = max(max_reward, reward_episode)
@@ -106,7 +109,8 @@ def collect_samples(pid, queue, env, policy, custom_reward, mean_action, render,
         log['min_c_reward'] = min_c_reward
 
     # if render:
-    log['episode_data'] = best_episode_data
+    log['best_episode_data'] = best_episode_data
+    log['worst_episode_data'] = worst_episode_data
  
     if queue is not None:
         queue.put([pid, memory, log])

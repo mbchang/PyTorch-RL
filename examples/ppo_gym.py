@@ -92,8 +92,17 @@ parser.add_argument('--fixed-var', action='store_true',
                     help='fixed variance')
 parser.add_argument('--vwght', type=str, default='1 0',
                     help='weight for xy: 1 0 is x vel forward, 0 -1 is y vel backward')
-parser.add_argument('--goal-dist', type=float, default=1,
-                    help='goal distance (default: 1)')
+parser.add_argument('--goal-dist', type=float, default=10,
+                    help='goal distance (default: 10)')
+
+parser.add_argument('--control-weight', type=float, default=0.1,
+                    help='control weight(default: 0.1)')
+parser.add_argument('--contact-weight', type=float, default=0.1,
+                    help='contact weight (default: 0.1)')
+parser.add_argument('--task-weight', type=float, default=0.7,
+                    help='task weight (default: 0.7)')
+parser.add_argument('--healthy-weight', type=float, default=0.1,
+                    help='healthy weight (default: 0.1)')
 
 
 args = parser.parse_args()
@@ -107,7 +116,7 @@ if torch.cuda.is_available():
 
 def merge_log(log_list):
     metrics = list(log_list[0].keys())
-    if 'frame' in log_list:
+    if 'frame' in log_list[0]:
         metrics.remove('frame')
     log = defaultdict(dict)
     aggregators = {'total': np.sum, 'avg': np.mean, 'max': np.max, 'min': np.min, 'std': np.std}
@@ -199,13 +208,21 @@ class Experiment():
         with torch.no_grad():
             test_batch, test_log = self.agent.collect_samples(
                 args.min_batch_size, deterministic=True, render=True)
-        episode_data = test_log['episode_data']
-        merged_episode_data = merge_log(episode_data)
-        self.logger.printf(display_stats(merged_episode_data))
+
+
+        best_episode_data = test_log['best_episode_data']
+        best_merged_episode_data = merge_log(best_episode_data)
+        self.logger.printf('Best Episode Data')
+        self.logger.printf(display_stats(best_merged_episode_data))
+        worst_episode_data = test_log['worst_episode_data']
+        worst_merged_episode_data = merge_log(worst_episode_data)
+        self.logger.printf('Worst Episode Data')
+        self.logger.printf(display_stats(worst_merged_episode_data))
+
         self.logger.printf('Test {}\tT_sample {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
         i_iter, test_log['sample_time'], test_log['min_reward'], test_log['max_reward'], test_log['avg_reward']))
         to_device(self.agent.device, self.agent.policy)
-        self.visualize(i_iter, episode_data, mode='test')
+        self.visualize(i_iter, best_episode_data, mode='test')
 
     def main_loop(self):
         for i_iter in range(args.max_iter_num+1):
@@ -230,9 +247,15 @@ class Experiment():
             self.logger.printf(display_stats(self.rl_alg.aggregate_stats()))
 
             if should_log:
-                episode_data = log['episode_data']
-                merged_episode_data = merge_log(episode_data)
-                self.logger.printf(display_stats(merged_episode_data))
+                best_episode_data = log['best_episode_data']
+                best_merged_episode_data = merge_log(best_episode_data)
+                self.logger.printf('Best Episode Data')
+                self.logger.printf(display_stats(best_merged_episode_data))
+                worst_episode_data = log['worst_episode_data']
+                worst_merged_episode_data = merge_log(worst_episode_data)
+                self.logger.printf('Worst Episode Data')
+                self.logger.printf(display_stats(worst_merged_episode_data))
+
                 self.logger.printf('{}\tT_sample {:.4f}\tT_update {:.4f}'.format(
                     i_iter, log['sample_time'], t1-t0))
 
@@ -259,14 +282,14 @@ def display_stats(stats):
     dash = '-' * border_length
     display_str = '{}\n'.format(doubledash)
     header_str = '|{:^{width}s} '.format('', width=lefter_width)
-    for a in aggregate_keys:
+    for a in sorted(aggregate_keys):
         header_str += '|{:^{width}}'.format(a, width=column_width)
     display_str += header_str +'|'
     display_str += '\n{}\n'.format(dash)
     ###############################################################
     for m in sorted(stats.keys()):
         metric_str = '|{:^{width}s} '.format(m, width=lefter_width)
-        for a in stats[m]:
+        for a in sorted(stats[m].keys()):
             metric_str += '|{:^{width}.4f}'.format(stats[m][a], width=column_width)
         display_str += metric_str+'|\n'
     ###############################################################
@@ -293,6 +316,14 @@ def build_expname(args):
     expname += '_vw-{}'.format(args.vwght.replace(' ', ''))
     expname += '_p-{}'.format(args.policy)
     expname += '_gd-{}'.format(args.goal_dist)
+
+    # expname += '_ctlw-{}'.format(args.control_weight)
+    # expname += '_cntw-{}'.format(args.contact_weight)
+    # expname += '_tw-{}'.format(args.task_weight)
+    # expname += '_hw-{}'.format(args.healthy_weight)
+
+    expname += '_expos_betterlog'
+
     if args.debug: expname+= '_debug'
     return expname
 
@@ -335,7 +366,23 @@ def initialize_environment(args):
     xw, yw = map(int, vw_str.split())
     vw = {'x': xw, 'y': yw}
     ######################################################
-    env = gym.make(args.env_name, velocity_weight=vw, goal_distance=args.goal_dist)
+    env = gym.make(args.env_name, velocity_weight=vw, goal_distance=args.goal_dist, exclude_current_positions_from_observation=False)
+
+
+    # env = gym.make(args.env_name, 
+    #     velocity_weight=vw, 
+    #     goal_distance=args.goal_dist,
+    #     control_weight=0.1,
+    #     contact_weight=0.1,
+    #     task_weight=0.7,
+    #     healthy_weight=0.1,
+
+    #     control_scale=4,
+    #     contact_scale=250,
+    #     task_scale=0.25,  # don't need to change
+
+    #     # if going to goal
+    #     )
     ######################################################
     # env = NormalizedBoxEnv(GoalXYPosAnt(max_distance=1))
     # env = MultitaskToFlatEnv(env)
