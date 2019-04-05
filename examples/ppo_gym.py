@@ -103,6 +103,8 @@ parser.add_argument('--task-weight', type=float, default=0.7,
                     help='task weight (default: 0.7)')
 parser.add_argument('--healthy-weight', type=float, default=0.1,
                     help='healthy weight (default: 0.1)')
+parser.add_argument('--task-scale', type=float, default=1,
+                    help='task scale (default: 1)')
 
 
 args = parser.parse_args()
@@ -313,16 +315,15 @@ def build_expname(args):
     expname += '_clr-{}'.format(args.clr)
     expname += '_eplen-{}'.format(args.maxeplen)
     expname += '_ntest-{}'.format(args.num_test)
-    expname += '_vw-{}'.format(args.vwght.replace(' ', ''))
     expname += '_p-{}'.format(args.policy)
+
     expname += '_gd-{}'.format(args.goal_dist)
-
-    # expname += '_ctlw-{}'.format(args.control_weight)
-    # expname += '_cntw-{}'.format(args.contact_weight)
-    # expname += '_tw-{}'.format(args.task_weight)
-    # expname += '_hw-{}'.format(args.healthy_weight)
-
-    expname += '_expos_betterlog'
+    expname += '_vw-{}'.format(args.vwght.replace(' ', ''))
+    expname += '_ctlw-{}'.format(args.control_weight)
+    expname += '_cntw-{}'.format(args.contact_weight)
+    expname += '_tw-{}'.format(args.task_weight)
+    expname += '_hw-{}'.format(args.healthy_weight)
+    expname += '_ts-{}'.format(args.task_scale)
 
     if args.debug: expname+= '_debug'
     return expname
@@ -366,23 +367,23 @@ def initialize_environment(args):
     xw, yw = map(int, vw_str.split())
     vw = {'x': xw, 'y': yw}
     ######################################################
-    env = gym.make(args.env_name, velocity_weight=vw, goal_distance=args.goal_dist, exclude_current_positions_from_observation=False)
+    # env = gym.make(args.env_name, velocity_weight=vw, goal_distance=args.goal_dist, exclude_current_positions_from_observation=False)
 
+    env = gym.make(args.env_name, 
+        velocity_weight=vw, 
+        goal_distance=args.goal_dist,
 
-    # env = gym.make(args.env_name, 
-    #     velocity_weight=vw, 
-    #     goal_distance=args.goal_dist,
-    #     control_weight=0.1,
-    #     contact_weight=0.1,
-    #     task_weight=0.7,
-    #     healthy_weight=0.1,
+        control_weight=args.control_weight,
+        contact_weight=args.contact_weight,
+        task_weight=args.task_weight,
+        healthy_weight=args.healthy_weight,
 
-    #     control_scale=4,
-    #     contact_scale=250,
-    #     task_scale=0.25,  # don't need to change
+        control_scale=4,
+        contact_scale=250,
+        task_scale=args.task_scale,  # don't need to change
 
-    #     # if going to goal
-    #     )
+        # if going to goal
+        )
     ######################################################
     # env = NormalizedBoxEnv(GoalXYPosAnt(max_distance=1))
     # env = MultitaskToFlatEnv(env)
@@ -395,9 +396,6 @@ def initialize_environment(args):
 
 def initialize_actor_critic(env, state_dim, is_disc_action, device):
     action_dim = env.action_space.n if is_disc_action else env.action_space.shape[0]
-    # print('state dim', state_dim)
-    # print('action_dim', action_dim)
-    # assert False
 
     """define actor and critic"""
     if args.model_path is None:
