@@ -8,7 +8,7 @@ def estimate_advantages(rewards, masks, values, gamma, tau, device):
     deltas = tensor_type(rewards.size(0), 1)
     advantages = tensor_type(rewards.size(0), 1)
 
-    prev_value = 0
+    prev_value = 0  # should change this to the value of the last state (not the state right before the end).
     prev_advantage = 0
     for i in reversed(range(rewards.size(0))):
         deltas[i] = rewards[i] + gamma * prev_value * masks[i] - values[i]
