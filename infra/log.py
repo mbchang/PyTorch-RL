@@ -285,3 +285,55 @@ def create_logger(build_expname, args):
         logger.save_params(logger.logdir, args)
     return logger
 
+
+def display_stats(stats):
+    metrics = list(stats.keys())
+    max_metric_length = max(len(x) for x in metrics)
+    aggregate_keys = list(stats[metrics[0]].keys())
+    num_aggregates = len(aggregate_keys)
+    agg_label_length = max(len(x) for x in stats[metrics[0]]) + 3
+    ###############################################################
+    value_length = 7
+    pad = 2
+    lefter_width = pad + max_metric_length + pad
+    column_width = pad + agg_label_length + value_length + pad
+    border_length = lefter_width + (column_width+1)*num_aggregates + 3
+    ###############################################################
+    doubledash = '=' * border_length
+    dash = '-' * border_length
+    display_str = '{}\n'.format(doubledash)
+    header_str = '|{:^{width}s} '.format('', width=lefter_width)
+    for a in sorted(aggregate_keys):
+        header_str += '|{:^{width}}'.format(a, width=column_width)
+    display_str += header_str +'|'
+    display_str += '\n{}\n'.format(dash)
+    ###############################################################
+    for m in sorted(stats.keys()):
+        metric_str = '|{:^{width}s} '.format(m, width=lefter_width)
+        for a in sorted(stats[m].keys()):
+            metric_str += '|{:^{width}.4f}'.format(stats[m][a], width=column_width)
+        display_str += metric_str+'|\n'
+    ###############################################################
+    display_str += doubledash
+    return display_str
+
+def merge_log(log_list):
+    metrics = list(log_list[0].keys())
+    if 'frame' in log_list[0]:
+        metrics.remove('frame')
+    log = defaultdict(dict)
+    aggregators = {'total': np.sum, 'avg': np.mean, 'max': np.max, 'min': np.min, 'std': np.std}
+    for m in metrics:
+        metric_data = [x[m] for x in log_list]
+        for a in aggregators:
+            log[m][a] = aggregators[a](metric_data)
+    return log
+
+def visualize_parameters(model, aString=None):
+    if aString:
+        print(aString)
+    for n, p in model.named_parameters():
+        if p.grad is None:
+            print(n, p.size(), p.data.norm(), "No grad")
+        else:
+            print(n, p.size(), p.data.norm(), p.grad.data.norm(), torch.max(p.grad.data))

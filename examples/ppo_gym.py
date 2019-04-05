@@ -14,17 +14,13 @@ import torch.nn.functional as F
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from core.agent import Agent
 from core.rl_algs import PPO
-from infra.log import create_logger
+from infra.log import create_logger, display_stats, merge_log
+from infra.env_config import *
 from models.mlp_policy import Policy
 from models.mlp_critic import Value
 from models.mlp_policy_disc import DiscretePolicy
 from models.primitives import Feedforward, CompositePolicy, WeightNetwork, PrimitivePolicy
 from utils import *
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from rlkit.envs.wrappers import NormalizedBoxEnv
-from rlkit.torch.tdm.envs.ant_env import GoalXYPosAnt
-from rlkit.torch.tdm.envs.multitask_env import MultitaskToFlatEnv
 
 parser = argparse.ArgumentParser(description='PyTorch PPO example')
 parser.add_argument('--env-name', default="Hopper-v2", metavar='G',
@@ -120,18 +116,6 @@ device = torch.device('cuda', index=args.gpu_index) if torch.cuda.is_available()
 if torch.cuda.is_available():
     torch.cuda.set_device(args.gpu_index)
     os.system('export OMP_NUM_THREADS=1')
-
-def merge_log(log_list):
-    metrics = list(log_list[0].keys())
-    if 'frame' in log_list[0]:
-        metrics.remove('frame')
-    log = defaultdict(dict)
-    aggregators = {'total': np.sum, 'avg': np.mean, 'max': np.max, 'min': np.min, 'std': np.std}
-    for m in metrics:
-        metric_data = [x[m] for x in log_list]
-        for a in aggregators:
-            log[m][a] = aggregators[a](metric_data)
-    return log
 
 class Experiment():
     def __init__(self, agent, env, rl_alg, logger, running_state, args):
@@ -272,47 +256,6 @@ class Experiment():
             """clean up gpu memory"""
             torch.cuda.empty_cache()
 
-def display_stats(stats):
-    metrics = list(stats.keys())
-    max_metric_length = max(len(x) for x in metrics)
-    aggregate_keys = list(stats[metrics[0]].keys())
-    num_aggregates = len(aggregate_keys)
-    agg_label_length = max(len(x) for x in stats[metrics[0]]) + 3
-    ###############################################################
-    value_length = 7
-    pad = 2
-    lefter_width = pad + max_metric_length + pad
-    column_width = pad + agg_label_length + value_length + pad
-    border_length = lefter_width + (column_width+1)*num_aggregates + 3
-    ###############################################################
-    doubledash = '=' * border_length
-    dash = '-' * border_length
-    display_str = '{}\n'.format(doubledash)
-    header_str = '|{:^{width}s} '.format('', width=lefter_width)
-    for a in sorted(aggregate_keys):
-        header_str += '|{:^{width}}'.format(a, width=column_width)
-    display_str += header_str +'|'
-    display_str += '\n{}\n'.format(dash)
-    ###############################################################
-    for m in sorted(stats.keys()):
-        metric_str = '|{:^{width}s} '.format(m, width=lefter_width)
-        for a in sorted(stats[m].keys()):
-            metric_str += '|{:^{width}.4f}'.format(stats[m][a], width=column_width)
-        display_str += metric_str+'|\n'
-    ###############################################################
-    display_str += doubledash
-    return display_str
-
-
-def visualize_parameters(model, aString=None):
-    if aString:
-        print(aString)
-    for n, p in model.named_parameters():
-        if p.grad is None:
-            print(n, p.size(), p.data.norm(), "No grad")
-        else:
-            print(n, p.size(), p.data.norm(), p.grad.data.norm(), torch.max(p.grad.data))
-
 def build_expname(args):
     expname = 'env-{}'.format(args.env_name)
     expname += '_opt-{}'.format(args.opt)
@@ -353,97 +296,6 @@ def process_args(args):
         args.num_threads = 1
         args.num_test = 5
     return args
-
-def make_renderer_track_agent(env, args):
-    if type(env) == NormalizedBoxEnv:
-        viewer = env.wrapped_env._get_viewer('rgb_array')
-    elif type(env) == MultitaskToFlatEnv:
-        viewer = env.wrapped_env.wrapped_env._get_viewer('rgb_array')
-    elif type(env) == gym.wrappers.time_limit.TimeLimit:
-        viewer = env.env._get_viewer('rgb_array')
-    else:
-        assert False
-    viewer.cam.type = 1
-    viewer.cam.trackbodyid = 0
-    viewer.cam.distance = max(4, 1.5*args.goal_dist+2)
-
-def get_env_root():
-    terminal_output = os.popen('pip show gym').readlines()
-    output_data = {}
-    for line in terminal_output:
-        delimiter = ': '
-        delimiter_loc = line.find(delimiter)
-        key = line[:delimiter_loc]
-        value = line[delimiter_loc+len(delimiter):].strip('\n')
-        output_data[key] = value
-    root = os.path.join(output_data['Location'], 'gym/envs/mujoco')
-    return root
-
-def replace_file(root, orig_file, new_file):
-    orig_file = os.path.join(root, orig_file)
-    new_file = os.path.join(root, new_file)
-    command = 'cp -r {} {}'.format(new_file, orig_file)
-    os.system(command)
-
-def initialize_environment(args):
-    vw_str = args.vwght
-    xw, yw = map(int, vw_str.split())
-    vw = {'x': xw, 'y': yw}
-
-    # NOTE: you cannot have multiple parallel runs work with the different environments!
-    new_file = args.env_name.replace('-', '_').lower()
-
-    if '-m-' in args.env_type:
-        # multitask
-        pass
-
-    if '-n-' in args.env_type:
-        # normalize
-        new_file += '_norm'
-
-    if 'vel' in args.env_type:
-        # velocity
-        new_file += '_vel'
-        env_args = {'velocity_weight': vw}
-
-    if 'goal' in args.env_type:
-        # goal
-        new_file += '_goal'
-        env_args = {'goal_distance': args.goal_dist,
-                    'exclude_current_positions_from_observation': False}
-
-    root = get_env_root()
-    replace_file(root, orig_file='ant_v3.py', new_file=new_file+'.py')
-
-    ######################################################
-    # env = gym.make(args.env_name, velocity_weight=vw, goal_distance=args.goal_dist, exclude_current_positions_from_observation=False)
-    # env = gym.make(args.env_name, velocity_weight=vw)
-    env = gym.make(args.env_name, **env_args)
-
-    # env = gym.make(args.env_name, 
-    #     velocity_weight=vw, 
-    #     goal_distance=args.goal_dist,
-
-    #     control_weight=args.control_weight,
-    #     contact_weight=args.contact_weight,
-    #     task_weight=args.task_weight,
-    #     healthy_weight=args.healthy_weight,
-
-    #     control_scale=4,
-    #     contact_scale=250,
-    #     task_scale=args.task_scale,  # don't need to change
-
-    #     # if going to goal
-    #     )
-    ######################################################
-    # env = NormalizedBoxEnv(GoalXYPosAnt(max_distance=1))
-    # env = MultitaskToFlatEnv(env)
-    # assert False
-    ######################################################
-    state_dim = env.observation_space.shape[0]
-    is_disc_action = len(env.action_space.shape) == 0
-    make_renderer_track_agent(env, args)
-    return env, state_dim, is_disc_action
 
 def initialize_actor_critic(env, state_dim, is_disc_action, device):
     action_dim = env.action_space.n if is_disc_action else env.action_space.shape[0]
