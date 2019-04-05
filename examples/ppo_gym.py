@@ -29,6 +29,12 @@ from rlkit.torch.tdm.envs.multitask_env import MultitaskToFlatEnv
 parser = argparse.ArgumentParser(description='PyTorch PPO example')
 parser.add_argument('--env-name', default="Hopper-v2", metavar='G',
                     help='name of the environment to run')
+
+
+parser.add_argument('--env-type', default="vel",
+                    help='vel | goal; n-: normalized; m-: multitask')
+
+
 parser.add_argument('--model-path', metavar='G',
                     help='path of pre-trained model')
 parser.add_argument('--render', action='store_true', default=False,
@@ -105,7 +111,6 @@ parser.add_argument('--healthy-weight', type=float, default=0.1,
                     help='healthy weight (default: 0.1)')
 parser.add_argument('--task-scale', type=float, default=1,
                     help='task scale (default: 1)')
-
 
 args = parser.parse_args()
 
@@ -362,28 +367,70 @@ def make_renderer_track_agent(env, args):
     viewer.cam.trackbodyid = 0
     viewer.cam.distance = max(4, 1.5*args.goal_dist+2)
 
+def get_env_root():
+    terminal_output = os.popen('pip show gym').readlines()
+    output_data = {}
+    for line in terminal_output:
+        delimiter = ': '
+        delimiter_loc = line.find(delimiter)
+        key = line[:delimiter_loc]
+        value = line[delimiter_loc+len(delimiter):].strip('\n')
+        output_data[key] = value
+    root = os.path.join(output_data['Location'], 'gym/envs/mujoco')
+    return root
+
+def replace_file(root, orig_file, new_file):
+    orig_file = os.path.join(root, orig_file)
+    new_file = os.path.join(root, new_file)
+    command = 'cp -r {} {}'.format(new_file, orig_file)
+    os.system(command)
+
 def initialize_environment(args):
     vw_str = args.vwght
     xw, yw = map(int, vw_str.split())
     vw = {'x': xw, 'y': yw}
+
+    # NOTE: you cannot have multiple parallel runs work with the different environments!
+    new_file = args.env_name.replace('-', '_').lower()
+
+    if '-m-' in args.env_type:
+        # multitask
+        pass
+
+    if '-n-' in args.env_type:
+        # normalize
+        new_file += '_norm'
+
+    if 'vel' in args.env_type:
+        # velocity
+        new_file += '_vel'
+
+    if 'goal' in args.env_type:
+        # goal
+        new_file += '_goal'
+
+    root = get_env_root()
+    replace_file(root, orig_file='ant_v3.py', new_file=new_file+'.py')
+
     ######################################################
     # env = gym.make(args.env_name, velocity_weight=vw, goal_distance=args.goal_dist, exclude_current_positions_from_observation=False)
+    env = gym.make(args.env_name, velocity_weight=vw)
 
-    env = gym.make(args.env_name, 
-        velocity_weight=vw, 
-        goal_distance=args.goal_dist,
+    # env = gym.make(args.env_name, 
+    #     velocity_weight=vw, 
+    #     goal_distance=args.goal_dist,
 
-        control_weight=args.control_weight,
-        contact_weight=args.contact_weight,
-        task_weight=args.task_weight,
-        healthy_weight=args.healthy_weight,
+    #     control_weight=args.control_weight,
+    #     contact_weight=args.contact_weight,
+    #     task_weight=args.task_weight,
+    #     healthy_weight=args.healthy_weight,
 
-        control_scale=4,
-        contact_scale=250,
-        task_scale=args.task_scale,  # don't need to change
+    #     control_scale=4,
+    #     contact_scale=250,
+    #     task_scale=args.task_scale,  # don't need to change
 
-        # if going to goal
-        )
+    #     # if going to goal
+    #     )
     ######################################################
     # env = NormalizedBoxEnv(GoalXYPosAnt(max_distance=1))
     # env = MultitaskToFlatEnv(env)
