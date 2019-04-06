@@ -303,45 +303,91 @@ Running it again, but this time add a constant to the reward.
 #         i = 0
 
 
-"""
-# 4/2/19
+# """
+# # 4/2/19
 
-Making the costs all 0
+# Making the costs all 0
+
+# """
+# optimizer = ['adam']
+# plr = [1e-5]
+# clr = [1e-4]
+# envs = ['Ant-v3']
+# policy = ['primitive']
+# eplen = [200]
+# numtest = [100]
+# vweights = ['1 0']
+
+# control_weight = [0]
+# contact_weight = [0]
+# healthy_weight = [0]
+# task_weight = [1]
+# task_scale = [1e-3, 1e-2, 1e-1, 1, 10, 100]
+
+# outputdir = 'runs/ant_test_optimizer_normalized_vel3'
+
+# gpu = True
+# num_gpus = 8
+# i = 0
+
+# if gpu:
+#     os.system('export OMP_NUM_THREADS=1')
+
+# for o, p, c, e, l, n, vw, pi, ctrl_wt, cnct_wt, h_wt, t_wt, t_s in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy, control_weight, contact_weight, healthy_weight, task_weight, task_scale):
+#     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+#     command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {} --control-weight {} --contact-weight {} --healthy-weight {} --task-weight {} --task-scale {}'.format(o, p, c, e, l, n, vw, pi, ctrl_wt, cnct_wt, h_wt, t_wt, t_s)
+#     command += ' --outputdir {}'.format(outputdir)
+#     command += ' --printf'
+#     command += ' &'
+#     print(prefix + command)
+#     os.system(prefix + command)
+#     i += 1
+#     if i >= num_gpus:
+#         i = 0
+
+
+"""
+# 4/6/19
+
+Multitask for velocity
 
 """
 optimizer = ['adam']
 plr = [1e-5]
 clr = [1e-4]
 envs = ['Ant-v3']
-policy = ['primitive']
+policy = ['primitive', 'composite']
 eplen = [200]
 numtest = [100]
-vweights = ['1 0']
+vweights = ['0 0']
 
-control_weight = [0]
-contact_weight = [0]
-healthy_weight = [0]
-task_weight = [1]
-task_scale = [1e-3, 1e-2, 1e-1, 1, 10, 100]
+# control_weight = [0]
+# contact_weight = [0]
+# healthy_weight = [0]
+# task_weight = [1]
+# task_scale = [1e-3, 1e-2, 1e-1, 1, 10, 100]
 
-outputdir = 'runs/ant_test_optimizer_normalized_vel3'
+outputdir = 'runs/ant_test_multitask_vel'
 
 gpu = True
-num_gpus = 8
+num_gpus = 2
 i = 0
 
 if gpu:
     os.system('export OMP_NUM_THREADS=1')
 
-for o, p, c, e, l, n, vw, pi, ctrl_wt, cnct_wt, h_wt, t_wt, t_s in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy, control_weight, contact_weight, healthy_weight, task_weight, task_scale):
+for o, p, c, e, l, n, vw, pi in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy):
     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
-    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {} --control-weight {} --contact-weight {} --healthy-weight {} --task-weight {} --task-scale {}'.format(o, p, c, e, l, n, vw, pi, ctrl_wt, cnct_wt, h_wt, t_wt, t_s)
+    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {}'.format(o, p, c, e, l, n, vw, pi)
+    command += ' --multitask'
     command += ' --outputdir {}'.format(outputdir)
     command += ' --printf'
     command += ' &'
     print(prefix + command)
-    os.system(prefix + command)
+    # os.system(prefix + command)
     i += 1
     if i >= num_gpus:
         i = 0
+
+
 

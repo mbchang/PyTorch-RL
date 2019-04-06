@@ -50,6 +50,8 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
         if render:
             frame = env.render(mode='rgb_array')
             e['frame'] = frame
+            if env.env.multitask or env.env.multitask_for_transfer:
+                e['goal'] = env.env.goal
         episode_data.append(e)
 
         if done:

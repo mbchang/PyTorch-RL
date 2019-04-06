@@ -110,6 +110,11 @@ parser.add_argument('--task-scale', type=float, default=1,
 
 parser.add_argument('--running-state', action='store_true',
                     help='running state')
+parser.add_argument('--multitask', action='store_true',
+                    help='multitask')
+parser.add_argument('--multitask-for-transfer', action='store_true',
+                    help='multitask for transfer')
+
 
 args = parser.parse_args()
 
@@ -168,8 +173,12 @@ class Experiment():
 
     def visualize(self, i_episode, episode_data, mode):
         frames = np.array([e['frame'] for e in episode_data])
+        if self.env.env.multitask or self.env.env.multitask_for_transfer:
+            label = '_g{}'.format(episode_data[0]['goal'])
+        else:
+            label = ''
         clip = ImageSequenceClip(list(frames), fps=30).resize(0.5)
-        clip.write_gif('{}/{}-{}.gif'.format(self.logger.logdir, mode, i_episode), fps=30)
+        clip.write_gif('{}/{}-{}{}.gif'.format(self.logger.logdir, mode, i_episode, label), fps=30)
 
     def save(self, i_iter):
         metric_keys = [

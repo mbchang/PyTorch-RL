@@ -18,7 +18,8 @@ def make_renderer_track_agent(env, args):
         assert False
     viewer.cam.type = 1
     viewer.cam.trackbodyid = 0
-    viewer.cam.distance = max(4, 1.5*args.goal_dist+2)
+    if 'goal' in args.env_type:
+        viewer.cam.distance = max(4, 1.5*args.goal_dist+2)
 
 def get_env_root():
     terminal_output = os.popen('pip show gym').readlines()
@@ -57,7 +58,9 @@ def initialize_environment(args):
     if 'vel' in args.env_type:
         # velocity
         new_file += '_vel'
-        env_args = {'velocity_weight': vw}
+        env_args = {'velocity_weight': vw, 
+                    'multitask': args.multitask, 
+                    'multitask_for_transfer': args.multitask_for_transfer}
 
     if 'goal' in args.env_type:
         # goal
