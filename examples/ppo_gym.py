@@ -259,8 +259,8 @@ class Experiment():
                 self.logger.printf('Worst Episode Data')
                 self.logger.printf(display_stats(worst_merged_episode_data))
 
-                self.logger.printf('{}\tT_sample {:.4f}\tT_update {:.4f}'.format(
-                    i_iter, log['sample_time'], t1-t0))
+                self.logger.printf('{}\tT_sample {:.4f}\tT_update {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
+                    i_iter, log['sample_time'], t1-t0, log['min_reward'], log['max_reward'], log['avg_reward']))
 
             if should_save:
                 self.save(i_iter)
@@ -321,7 +321,6 @@ def initialize_actor_critic(env, state_dim, is_disc_action, device):
 
             if args.policy == 'vanilla':
                 policy_net = Policy(state_dim, action_dim, log_std=args.log_std)
-                value_net = Value(state_dim)
             elif args.policy == 'primitive':
                 if args.debug:
                     encoder = Feedforward([state_dim, 64, 64], out_act=F.relu)
@@ -331,27 +330,23 @@ def initialize_actor_critic(env, state_dim, is_disc_action, device):
                     # policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[256, action_dim], device=device)
                     encoder = Feedforward([state_dim, 128], out_act=F.relu)
                     policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device)
-                value_net = Value(state_dim)
             elif args.policy == 'composite':
                 num_primitives = 3
+                goal_dim = 2
+                obs_dim = state_dim - goal_dim
                 if args.debug:
-                    goal_dim = 2
-                    obs_dim = state_dim - goal_dim
                     encoders = [Feedforward([obs_dim, 64], out_act=F.relu) for i in range(num_primitives)]
                     primitive_builder = lambda e: PrimitivePolicy(encoder=e, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, fixed_var=args.fixed_var, vib=False)
                     weight_network = WeightNetwork(state_dim=obs_dim, goal_dim=goal_dim, encoder_dims=[64], bottleneck_dim=64, decoder_dims=[64, num_primitives], device=device)
                     policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e) for e in encoders]), obs_dim=obs_dim)          
                 else:
-                    goal_dim = 2
-                    obs_dim = state_dim - goal_dim
                     encoders = [Feedforward([obs_dim, 128], out_act=F.relu) for i in range(num_primitives)]
                     primitive_builder = lambda e: PrimitivePolicy(encoder=e, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device)
                     weight_network = WeightNetwork(state_dim=obs_dim, goal_dim=goal_dim, encoder_dims=[128], bottleneck_dim=128, decoder_dims=[128, num_primitives], device=device)
                     policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e) for e in encoders]), obs_dim=obs_dim) 
-                value_net = Value(obs_dim+goal_dim)     
             else:
                 False
-        # value_net = Value(state_dim)
+        value_net = Value(state_dim)
     ######################################################
     # TODO verify that this works
     if args.resume:
