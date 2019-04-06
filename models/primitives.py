@@ -20,9 +20,7 @@ class WeightNetwork(nn.Module):
         self.goal_trunk = Feedforward([goal_dim] + encoder_dims + [bottleneck_dim])
         self.decoder = Feedforward([bottleneck_dim*2]+decoder_dims, out_act=F.sigmoid)
 
-    # TODO: x, g as input
-    def forward(self, x):
-        g = x
+    def forward(self, x, g):
         z, kl = self.bottleneck(self.state_trunk(x))
         goal_embedding = self.goal_trunk(g)
         h = torch.cat((z, goal_embedding), dim=1)
@@ -47,8 +45,8 @@ class GaussianPolicy(nn.Module):
             return action
 
     def get_log_prob(self, state, action):
-        bsize = state.size(0)
         mu, std, kl = self.forward(state)
+        bsize = mu.size(0)
         dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
         log_prob = dist.log_prob(action).view(bsize, 1)
         entropy = dist.entropy().view(bsize, 1)
@@ -66,6 +64,7 @@ class PrimitivePolicy(GaussianPolicy):
         self.bottleneck = bottleneck(encoder.dims[-1], bottleneck_dim, device=device)
         self.decoder = nn.Linear(bottleneck_dim, decoder_dims[0])
         self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_var=fixed_var)
+        self.name = 'primitive'
 
     def forward(self, x):
         x = self.encoder(x)
@@ -75,20 +74,23 @@ class PrimitivePolicy(GaussianPolicy):
         return mu, torch.exp(logstd), kl
 
 class CompositePolicy(GaussianPolicy):
-    def __init__(self, weight_network, primitives):
+    def __init__(self, weight_network, primitives, obs_dim):
         super(CompositePolicy, self).__init__()
         self.primitives = primitives
         self.weight_network = weight_network
         self.k = len(self.primitives)
         self.outdim = self.primitives[0].outdim
+        self.name = 'composite'
+        self.obs_dim = obs_dim
 
     def forward(self, state):
+        state, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
         bsize = state.size(0)
         mus, stds, kls = zip(*[p(state) for p in self.primitives])  # list of length k of (bsize, adim)
         mus = torch.stack(mus, dim=1)  # (bsize, k, outdim)
         stds = torch.stack(stds, dim=1)  # (bsize, k, outdim)
         kls = torch.stack(kls, dim=1)  # (bsize)
-        weights, weights_kl = self.weight_network(state)
+        weights, weights_kl = self.weight_network(state, goal)
         broadcasted_weights = weights.view(bsize, self.k, 1)
         ##############################
         weights_over_variance = broadcasted_weights/(stds*stds)  # (bsize, k, zdim)

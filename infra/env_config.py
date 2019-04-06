@@ -73,6 +73,8 @@ def initialize_environment(args):
     # env = gym.make(args.env_name, velocity_weight=vw)
     env = gym.make(args.env_name, **env_args)
 
+    # env = multitask(env)  # this should append the task to the state
+
     # env = gym.make(args.env_name, 
     #     velocity_weight=vw, 
     #     goal_distance=args.goal_dist,
