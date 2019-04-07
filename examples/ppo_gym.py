@@ -115,6 +115,9 @@ parser.add_argument('--multitask', action='store_true',
 parser.add_argument('--multitask-for-transfer', action='store_true',
                     help='multitask for transfer')
 
+parser.add_argument('--nprims', type=int, default=1, metavar='N',
+                    help='number of primitives (default: 1)')
+
 
 args = parser.parse_args()
 
@@ -286,6 +289,7 @@ def build_expname(args):
     expname += '_tw-{}'.format(args.task_weight)
     expname += '_hw-{}'.format(args.healthy_weight)
     expname += '_ts-{}'.format(args.task_scale)
+    expname += '_np-{}'.format(args.nprims)
 
     if args.debug: expname+= '_debug'
     return expname
@@ -335,7 +339,7 @@ def initialize_actor_critic(env, state_dim, is_disc_action, device):
                     policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device, id=0)
                 value_net = Value(state_dim)
             elif args.policy == 'composite':
-                num_primitives = 3
+                num_primitives = args.nprims
                 goal_dim = 2
                 # obs_dim = state_dim - goal_dim
                 if args.debug:

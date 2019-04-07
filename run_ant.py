@@ -346,45 +346,86 @@ Running it again, but this time add a constant to the reward.
 #         i = 0
 
 
+# """
+# # 4/6/19
+
+# Multitask for velocity
+
+# Conclusion: Seemes like it is reasonable.
+
+# """
+# optimizer = ['adam']
+# plr = [1e-5]
+# clr = [1e-4]
+# envs = ['Ant-v3']
+# policy = ['primitive', 'composite']
+# eplen = [200]
+# numtest = [100]
+# vweights = ['0 0']
+
+# # control_weight = [0]
+# # contact_weight = [0]
+# # healthy_weight = [0]
+# # task_weight = [1]
+# # task_scale = [1e-3, 1e-2, 1e-1, 1, 10, 100]
+
+# outputdir = 'runs/ant_test_multitask_vel'
+
+# gpu = True
+# num_gpus = 2
+# i = 0
+
+# if gpu:
+#     os.system('export OMP_NUM_THREADS=1')
+
+# for o, p, c, e, l, n, vw, pi in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy):
+#     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+#     command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {}'.format(o, p, c, e, l, n, vw, pi)
+#     command += ' --multitask'
+#     command += ' --outputdir {}'.format(outputdir)
+#     command += ' --printf'
+#     command += ' &'
+#     print(prefix + command)
+#     # os.system(prefix + command)
+#     i += 1
+#     if i >= num_gpus:
+#         i = 0
+
+
 """
 # 4/6/19
 
-Multitask for velocity
+Multitask for velocity, varying the primitives
 
 """
 optimizer = ['adam']
 plr = [1e-5]
 clr = [1e-4]
 envs = ['Ant-v3']
-policy = ['primitive', 'composite']
+policy = ['composite']
 eplen = [200]
 numtest = [100]
 vweights = ['0 0']
+nprims = [1, 2, 3, 4, 5, 6, 7, 8]
 
-# control_weight = [0]
-# contact_weight = [0]
-# healthy_weight = [0]
-# task_weight = [1]
-# task_scale = [1e-3, 1e-2, 1e-1, 1, 10, 100]
-
-outputdir = 'runs/ant_test_multitask_vel'
+outputdir = 'runs/ant_test_multitask_vel_nprims'
 
 gpu = True
-num_gpus = 2
+num_gpus = 8
 i = 0
 
 if gpu:
     os.system('export OMP_NUM_THREADS=1')
 
-for o, p, c, e, l, n, vw, pi in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy):
+for o, p, c, e, l, n, vw, pi, np in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy, nprims):
     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
-    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {}'.format(o, p, c, e, l, n, vw, pi)
+    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {} --nprims {}'.format(o, p, c, e, l, n, vw, pi, np)
     command += ' --multitask'
     command += ' --outputdir {}'.format(outputdir)
     command += ' --printf'
     command += ' &'
     print(prefix + command)
-    # os.system(prefix + command)
+    os.system(prefix + command)
     i += 1
     if i >= num_gpus:
         i = 0
