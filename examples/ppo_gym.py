@@ -14,7 +14,7 @@ import torch.nn.functional as F
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from core.agent import Agent
 from core.rl_algs import PPO
-from infra.log import create_logger, display_stats, merge_log
+from infra.log import create_logger, display_stats, merge_log, visualize_parameters
 from infra.env_config import *
 from models.mlp_policy import Policy
 from models.mlp_critic import Value
@@ -273,7 +273,7 @@ class Experiment():
             """clean up gpu memory"""
             torch.cuda.empty_cache()
 
-def build_expname(args):
+def build_expname(args, ext=''):
     expname = 'env-{}'.format(args.env_name)
     expname += '_opt-{}'.format(args.opt)
     expname += '_plr-{}'.format(args.plr)
@@ -291,6 +291,7 @@ def build_expname(args):
     expname += '_ts-{}'.format(args.task_scale)
     expname += '_np-{}'.format(args.nprims)
 
+    expname += ext
     if args.debug: expname+= '_debug'
     return expname
 
@@ -314,6 +315,7 @@ def process_args(args):
         args.num_threads = 1
         args.num_test = 5
         # args.nprims = 2
+        args.plr = 1e-2
     return args
 
 def initialize_actor_critic(env, device):
@@ -418,26 +420,49 @@ def main_transfer(args):
 
     # """define actor and critic"""
     policy_net, value_net = initialize_actor_critic(env, device)
+
+    print('Initial')
+    visualize_parameters(policy_net.weight_network)
+    visualize_parameters(value_net)
+    # assert False
+
     """create agent"""
     agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
     logger = create_logger(build_expname, args)
     initialize_logger(logger)
     rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
-    exp = Experiment(agent, env, rl_alg, logger, running_state, args)
+    exp = Experiment(agent, env, rl_alg, logger, None, args)
     exp.main_loop()
 
+    print('After Training')
+    visualize_parameters(policy_net.weight_network)
+    visualize_parameters(value_net)
+    visualize_parameters(policy_net.primitives[0])
+
     # now reset the weight network and the value function.
-    policy_net, value_net = reset_weightnet_critic(env, agent.policy_net, device)
+    policy_net, value_net = reset_weightnet_critic(env, agent.policy, device)
+
+    print('After Reset')
+    visualize_parameters(policy_net.weight_network)
+    visualize_parameters(value_net)
+    visualize_parameters(policy_net.primitives[0])
+
     agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
-    logger = create_logger(build_expname, args)  # with transfer tag
+    logger = create_logger(lambda params: build_expname(args=params, ext='_transfer'), args)  # with transfer tag
     initialize_logger(logger)  # should save in the same folder as before
     rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
-    exp = Experiment(agent, env, rl_alg, logger, running_state, args)
+    exp = Experiment(agent, env, rl_alg, logger, None, args)
     exp.main_loop()
+
+    print('After Transfer')
+    visualize_parameters(policy_net.weight_network)
+    visualize_parameters(value_net)
+    visualize_parameters(policy_net.primitives[0])
 
 
 if __name__ == '__main__':
-    main(args)
+    # main(args)
+    main_transfer(args)
 
 
 
