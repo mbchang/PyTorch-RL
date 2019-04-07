@@ -313,9 +313,13 @@ def process_args(args):
         args.min_batch_size = 128
         args.num_threads = 1
         args.num_test = 5
+        # args.nprims = 2
     return args
 
-def initialize_actor_critic(env, state_dim, is_disc_action, device):
+def initialize_actor_critic(env, device):
+    state_dim = env.observation_space.shape[0]
+    is_disc_action = len(env.action_space.shape) == 0
+
     action_dim = env.action_space.n if is_disc_action else env.action_space.shape[0]
 
     """define actor and critic"""
@@ -333,29 +337,20 @@ def initialize_actor_critic(env, state_dim, is_disc_action, device):
                     encoder = Feedforward([state_dim, 64, 64], out_act=F.relu)
                     policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, id=0, fixed_var=args.fixed_var, vib=False)
                 else:
-                    # encoder = Feedforward([state_dim, 512, 256], out_act=F.relu)
-                    # policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[256, action_dim], device=device)
                     encoder = Feedforward([state_dim, 128], out_act=F.relu)
                     policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device, id=0)
                 value_net = Value(state_dim)
             elif args.policy == 'composite':
                 num_primitives = args.nprims
-                goal_dim = 2
-                # obs_dim = state_dim - goal_dim
-                if args.debug:
-                    encoders = [Feedforward([state_dim, 64], out_act=F.relu) for i in range(num_primitives)]
-                    primitive_builder = lambda e, i: PrimitivePolicy(encoder=e, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, id=i, fixed_var=args.fixed_var, vib=False)
-                    weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[64], bottleneck_dim=64, decoder_dims=[64, num_primitives], device=device)
-                    policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e, i) for i, e in enumerate(encoders)]), obs_dim=state_dim)          
-                else:
-                    encoders = [Feedforward([state_dim, 128], out_act=F.relu) for i in range(num_primitives)]
-                    primitive_builder = lambda e, i: PrimitivePolicy(encoder=e, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device, id=i)
-                    weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[128], bottleneck_dim=128, decoder_dims=[128, num_primitives], device=device)
-                    policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e, i) for i, e in enumerate(encoders)]), obs_dim=state_dim) 
+                goal_dim = env.env.goal_dim
+                hdim = 64 if args.debug else 128
+                encoders = [Feedforward([state_dim, hdim], out_act=F.relu) for i in range(num_primitives)]
+                primitive_builder = lambda e, i: PrimitivePolicy(encoder=e, bottleneck_dim=hdim, decoder_dims=[hdim, action_dim], device=device, id=i)
+                weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[hdim], bottleneck_dim=hdim, decoder_dims=[hdim, num_primitives], device=device)
+                policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e, i) for i, e in enumerate(encoders)]), obs_dim=state_dim) 
                 value_net = Value(state_dim+goal_dim)
             else:
                 False
-        # value_net = Value(state_dim)
     ######################################################
     # TODO verify that this works
     if args.resume:
@@ -370,14 +365,23 @@ def initialize_actor_critic(env, state_dim, is_disc_action, device):
     value_net.to(device)
     return policy_net, value_net
 
+def reset_weightnet_critic(env, composite_policy, device):
+    state_dim = env.observation_space.shape[0]
+    goal_dim = env.env.goal_dim
+    num_primitives = args.nprims
+    hdim = 64 if args.debug else 128
+    weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[hdim], bottleneck_dim=hdim, decoder_dims=[hdim, num_primitives], device=device)
+    composite_policy.weight_network = weight_network
+    value_net = Value(state_dim+goal_dim)
+    composite_policy.to(device)
+    value_net.to(device)
+    return composite_policy, value_net
 
 def main(args):
     args = process_args(args)
-    logger = create_logger(build_expname, args)
-    initialize_logger(logger)
 
     """environment"""
-    env, state_dim, is_disc_action = initialize_environment(args)
+    env = initialize_environment(args)
 
     """seeding"""
     np.random.seed(args.seed)
@@ -391,15 +395,46 @@ def main(args):
     # running_reward = ZFilter((1,), demean=False, clip=10)
 
     # """define actor and critic"""
-    policy_net, value_net = initialize_actor_critic(env, state_dim, is_disc_action, device)
-
+    policy_net, value_net = initialize_actor_critic(env, device)
     """create agent"""
     agent = Agent(env, policy_net, value_net, device, args, running_state=running_state, num_threads=args.num_threads)
-
+    logger = create_logger(build_expname, args)
+    initialize_logger(logger)
     rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
-
     exp = Experiment(agent, env, rl_alg, logger, running_state, args)
     exp.main_loop()
+
+def main_transfer(args):
+    args = process_args(args)
+    assert args.policy == 'composite'
+
+    """environment"""
+    env = initialize_environment(args)
+
+    """seeding"""
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    env.seed(args.seed)
+
+    # """define actor and critic"""
+    policy_net, value_net = initialize_actor_critic(env, device)
+    """create agent"""
+    agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
+    logger = create_logger(build_expname, args)
+    initialize_logger(logger)
+    rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
+    exp = Experiment(agent, env, rl_alg, logger, running_state, args)
+    exp.main_loop()
+
+    # now reset the weight network and the value function.
+    policy_net, value_net = reset_weightnet_critic(env, agent.policy_net, device)
+    agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
+    logger = create_logger(build_expname, args)  # with transfer tag
+    initialize_logger(logger)  # should save in the same folder as before
+    rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
+    exp = Experiment(agent, env, rl_alg, logger, running_state, args)
+    exp.main_loop()
+
 
 if __name__ == '__main__':
     main(args)

@@ -98,7 +98,7 @@ def initialize_environment(args):
     # env = MultitaskToFlatEnv(env)
     # assert False
     ######################################################
-    state_dim = env.observation_space.shape[0]
-    is_disc_action = len(env.action_space.shape) == 0
+    # state_dim = env.observation_space.shape[0]
+    # is_disc_action = len(env.action_space.shape) == 0
     make_renderer_track_agent(env, args)
-    return env, state_dim, is_disc_action
+    return env#, state_dim, is_disc_action

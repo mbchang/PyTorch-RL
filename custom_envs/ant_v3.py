@@ -49,6 +49,7 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.multitask = multitask
         self.multitask_for_transfer = multitask_for_transfer
         self.goal = np.array([self.velocity_weight['x'], self.velocity_weight['y']])
+        self.goal_dim = len(self.goal)
         ######################################
 
         mujoco_env.MujocoEnv.__init__(self, xml_file, 5)
