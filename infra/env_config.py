@@ -60,7 +60,6 @@ def initialize_environment(args):
         new_file += '_vel'
         env_args = {'velocity_weight': vw, 
                     'multitask': args.multitask, 
-                    'multitask_for_transfer': args.multitask_for_transfer,
                     }
 
     if 'goal' in args.env_type:

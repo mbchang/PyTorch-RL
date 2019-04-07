@@ -117,6 +117,8 @@ parser.add_argument('--multitask-for-transfer', action='store_true',
 
 parser.add_argument('--nprims', type=int, default=1, metavar='N',
                     help='number of primitives (default: 1)')
+parser.add_argument('--for-transfer', action='store_true',
+                    help='multitask for transfer')
 
 
 args = parser.parse_args()
@@ -399,6 +401,7 @@ def main(args):
     # """define actor and critic"""
     policy_net, value_net = initialize_actor_critic(env, device)
     """create agent"""
+    env.env.train_mode()
     agent = Agent(env, policy_net, value_net, device, args, running_state=running_state, num_threads=args.num_threads)
     logger = create_logger(build_expname, args)
     initialize_logger(logger)
@@ -406,11 +409,11 @@ def main(args):
     exp = Experiment(agent, env, rl_alg, logger, running_state, args)
     exp.main_loop()
 
-def visualize_params(dict_of_models):
+def visualize_params(dict_of_models, pfunc):
     for k, v in dict_of_models.items():
-        print('#'*20 + ' {} '.format(k) + '#'*(80-len(k)-2-20))
-        visualize_parameters(v)
-    print('#'*80)
+        pfunc('#'*20 + ' {} '.format(k) + '#'*(80-len(k)-2-20))
+        visualize_parameters(v, pfunc)
+    pfunc('#'*80)
 
 def main_transfer(args):
     args = process_args(args)
@@ -427,51 +430,62 @@ def main_transfer(args):
     # """define actor and critic"""
     policy_net, value_net = initialize_actor_critic(env, device)
 
-    print('Initial')
-    visualize_params({
-        'Weight Network': policy_net.weight_network,
-        'Value Network': value_net,
-        'Primitive 0': policy_net.primitives[0]})
-
     """create agent"""
+    env.env.train_mode()
     agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
     logger = create_logger(build_expname, args)
     initialize_logger(logger)
+
+    logger.printf('Initial')
+    visualize_params({
+        'Weight Network': policy_net.weight_network,
+        'Value Network': value_net,
+        'Primitive 0': policy_net.primitives[0]},
+        pfunc=lambda x: logger.printf(x))
+
     rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
     exp = Experiment(agent, env, rl_alg, logger, None, args)
     exp.main_loop()
 
-    print('After Training')
+    logger.printf('After Training')
     visualize_params({
         'Weight Network': policy_net.weight_network,
         'Value Network': value_net,
-        'Primitive 0': policy_net.primitives[0]})
+        'Primitive 0': policy_net.primitives[0]},
+        pfunc=lambda x: logger.printf(x))
+
 
     # now reset the weight network and the value function.
     policy_net, value_net = reset_weightnet_critic(env, agent.policy, device)
 
-    print('After Reset')
-    visualize_params({
-    'Weight Network': policy_net.weight_network,
-    'Value Network': value_net,
-    'Primitive 0': policy_net.primitives[0]})
-
+    env.env.test_mode()
     agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
     logger = create_logger(lambda params: build_expname(args=params, ext='_transfer'), args)  # with transfer tag
     initialize_logger(logger)  # should save in the same folder as before
+
+    logger.printf('After Reset')
+    visualize_params({
+        'Weight Network': policy_net.weight_network,
+        'Value Network': value_net,
+        'Primitive 0': policy_net.primitives[0]},
+        pfunc=lambda x: logger.printf(x))
+
     rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
     exp = Experiment(agent, env, rl_alg, logger, None, args)
     exp.main_loop()
 
-    print('After Transfer')
+    logger.printf('After Transfer')
     visualize_params({
         'Weight Network': policy_net.weight_network,
         'Value Network': value_net,
-        'Primitive 0': policy_net.primitives[0]})
+        'Primitive 0': policy_net.primitives[0]},
+        pfunc=lambda x: logger.printf(x))
 
 if __name__ == '__main__':
-    # main(args)
-    main_transfer(args)
+    if args.for_transfer:
+        main_transfer(args)
+    else:
+        main(args)
 
 
 

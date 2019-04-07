@@ -330,11 +330,11 @@ def merge_log(log_list):
             log[m][a] = aggregators[a](metric_data)
     return log
 
-def visualize_parameters(model, aString=None):
+def visualize_parameters(model, pfunc, aString=None):
     if aString:
-        print(aString)
+        pfunc(aString)
     for n, p in model.named_parameters():
         if p.grad is None:
-            print('\t', n, p.size(), p.data.norm(), "No grad")
+            pfunc('\t\t{}\t{}\t{}\t{}'.format(n, p.size(), p.data.norm(), "No grad"))
         else:
-            print('\t', n, p.size(), p.data.norm(), p.grad.data.norm(), torch.max(p.grad.data))
+            pfunc('\t\t{}\t{}\t{}\t{}\t{}'.format(n, p.size(), p.data.norm(), p.grad.data.norm(), torch.max(p.grad.data)))

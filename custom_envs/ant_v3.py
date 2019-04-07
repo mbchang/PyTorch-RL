@@ -1,4 +1,5 @@
 import copy
+import itertools
 import numpy as np
 from gym import utils
 from gym.envs.mujoco import mujoco_env
@@ -24,7 +25,6 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
                  # Michael Changed
                  velocity_weight={'x': 1, 'y': 0},
                  multitask=False,
-                 multitask_for_transfer=False,
                  ######################################
                  ):
         utils.EzPickle.__init__(**locals())
@@ -47,7 +47,6 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         # Michael Changed
         self.velocity_weight = velocity_weight
         self.multitask = multitask
-        self.multitask_for_transfer = multitask_for_transfer
         self.goal = np.array([self.velocity_weight['x'], self.velocity_weight['y']])
         self.goal_dim = len(self.goal)
         ######################################
@@ -169,12 +168,23 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         x = np.concatenate((obs, goal))
         return x
 
+    def train_mode(self):
+        combos = list(itertools.product([0, -1, 1], [0, -1, 1]))
+        combos.remove((0,0))
+        train_combos = [(x, y) for x,y in combos if x*y == 0]
+        self.combos = train_combos
+
+    def test_mode(self):
+        combos = list(itertools.product([0, -1, 1], [0, -1, 1]))
+        combos.remove((0,0))
+        train_combos = [(x, y) for x,y in combos if x*y != 0]
+        self.combos = train_combos
+
     def reset_goal(self):
         if self.multitask:
-            self.velocity_weight['x'] = np.random.choice([0, 1, -1])
-            self.velocity_weight['y'] = np.random.choice([0, 1, -1])
-        elif self.multitask_for_transfer:
-            pass
+            vw = self.combos[np.random.randint(len(self.combos))]
+            self.velocity_weight['x'] = vw[0]
+            self.velocity_weight['y'] = vw[1]
         self.goal = np.array([self.velocity_weight['x'], self.velocity_weight['y']])
         return copy.deepcopy(self.goal)
 
