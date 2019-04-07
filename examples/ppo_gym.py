@@ -171,14 +171,14 @@ class Experiment():
                     best_episode_data = copy.deepcopy(episode_data)
         return best_episode_data
 
-    def visualize(self, i_episode, episode_data, mode):
+    def visualize(self, policy_name, i_episode, episode_data, mode):
         frames = np.array([e['frame'] for e in episode_data])
         if self.env.env.multitask or self.env.env.multitask_for_transfer:
             label = '_g{}'.format(episode_data[0]['goal'])
         else:
             label = ''
         clip = ImageSequenceClip(list(frames), fps=30).resize(0.5)
-        clip.write_gif('{}/{}-{}{}.gif'.format(self.logger.logdir, mode, i_episode, label), fps=30)
+        clip.write_gif('{}/{}-{}-{}{}.gif'.format(self.logger.logdir, policy_name, mode, i_episode, label), fps=30)
 
     def save(self, i_iter):
         metric_keys = [
@@ -206,12 +206,15 @@ class Experiment():
                     open(os.path.join(assets_dir(), 'learned_models/{}_ppo.p'.format(args.env_name)), 'wb'))
         to_device(device, self.agent.policy, self.agent.valuefn)
 
-    def test(self, i_iter):
-        to_device(torch.device('cpu'), self.agent.policy)
+    def test(self, policy, i_iter, hide_goal):
+        to_device(torch.device('cpu'), policy)
         with torch.no_grad():
             test_batch, test_log = self.agent.collect_samples(
-                args.min_batch_size, deterministic=True, render=True)
-
+                policy=policy,
+                min_batch_size=args.min_batch_size, 
+                deterministic=True, 
+                render=True,
+                hide_goal=hide_goal)
 
         best_episode_data = test_log['best_episode_data']
         best_merged_episode_data = merge_log(best_episode_data)
@@ -224,8 +227,8 @@ class Experiment():
 
         self.logger.printf('Test {}\tT_sample {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
         i_iter, test_log['sample_time'], test_log['min_reward'], test_log['max_reward'], test_log['avg_reward']))
-        to_device(self.agent.device, self.agent.policy)
-        self.visualize(i_iter, best_episode_data, mode='test')
+        to_device(self.agent.device, policy)
+        self.visualize(policy_name=policy.name, i_episode=i_iter, episode_data=best_episode_data, mode='test')
 
     def main_loop(self):
         for i_iter in range(args.max_iter_num+1):
@@ -234,15 +237,19 @@ class Experiment():
             should_save = i_iter % self.args.save_every == 0
             should_visualize = i_iter % self.args.visualize_every == 0
 
+            if should_visualize:
+                self.test(policy=self.agent.policy, i_iter=i_iter, hide_goal=False)
+                for p in self.agent.policy.primitives:
+                    self.test(policy=p, i_iter=i_iter, hide_goal=True)
+
             """generate multiple trajectories that reach the minimum batch_size"""
-            batch, log = self.agent.collect_samples(args.min_batch_size)  # here you can record the action mean and std
+            batch, log = self.agent.collect_samples(
+                policy=self.agent.policy, 
+                min_batch_size=args.min_batch_size)  # here you can record the action mean and std
 
             for metric in ['min_reward', 'avg_reward', 'max_reward']:
                 self.logger.update_variable(
                     name=metric, index=i_iter, value=log[metric], include_running_avg=True)
-
-            if should_visualize:
-                self.test(i_iter)
 
             t0 = time.time()
             self.rl_alg.update_params(batch, i_iter, self.agent)
@@ -321,32 +328,35 @@ def initialize_actor_critic(env, state_dim, is_disc_action, device):
 
             if args.policy == 'vanilla':
                 policy_net = Policy(state_dim, action_dim, log_std=args.log_std)
+                value_net = Value(state_dim)
             elif args.policy == 'primitive':
                 if args.debug:
                     encoder = Feedforward([state_dim, 64, 64], out_act=F.relu)
-                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, fixed_var=args.fixed_var, vib=False)
+                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, id=0, fixed_var=args.fixed_var, vib=False)
                 else:
                     # encoder = Feedforward([state_dim, 512, 256], out_act=F.relu)
                     # policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[256, action_dim], device=device)
                     encoder = Feedforward([state_dim, 128], out_act=F.relu)
-                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device)
+                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device, id=0)
+                value_net = Value(state_dim)
             elif args.policy == 'composite':
                 num_primitives = 3
                 goal_dim = 2
-                obs_dim = state_dim - goal_dim
+                # obs_dim = state_dim - goal_dim
                 if args.debug:
-                    encoders = [Feedforward([obs_dim, 64], out_act=F.relu) for i in range(num_primitives)]
-                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, fixed_var=args.fixed_var, vib=False)
-                    weight_network = WeightNetwork(state_dim=obs_dim, goal_dim=goal_dim, encoder_dims=[64], bottleneck_dim=64, decoder_dims=[64, num_primitives], device=device)
-                    policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e) for e in encoders]), obs_dim=obs_dim)          
+                    encoders = [Feedforward([state_dim, 64], out_act=F.relu) for i in range(num_primitives)]
+                    primitive_builder = lambda e, i: PrimitivePolicy(encoder=e, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, id=i, fixed_var=args.fixed_var, vib=False)
+                    weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[64], bottleneck_dim=64, decoder_dims=[64, num_primitives], device=device)
+                    policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e, i) for i, e in enumerate(encoders)]), obs_dim=state_dim)          
                 else:
-                    encoders = [Feedforward([obs_dim, 128], out_act=F.relu) for i in range(num_primitives)]
-                    primitive_builder = lambda e: PrimitivePolicy(encoder=e, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device)
-                    weight_network = WeightNetwork(state_dim=obs_dim, goal_dim=goal_dim, encoder_dims=[128], bottleneck_dim=128, decoder_dims=[128, num_primitives], device=device)
-                    policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e) for e in encoders]), obs_dim=obs_dim) 
+                    encoders = [Feedforward([state_dim, 128], out_act=F.relu) for i in range(num_primitives)]
+                    primitive_builder = lambda e, i: PrimitivePolicy(encoder=e, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device, id=i)
+                    weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[128], bottleneck_dim=128, decoder_dims=[128, num_primitives], device=device)
+                    policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e, i) for i, e in enumerate(encoders)]), obs_dim=state_dim) 
+                value_net = Value(state_dim+goal_dim)
             else:
                 False
-        value_net = Value(state_dim)
+        # value_net = Value(state_dim)
     ######################################################
     # TODO verify that this works
     if args.resume:

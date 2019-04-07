@@ -1,3 +1,4 @@
+import copy
 import numpy as np
 from gym import utils
 from gym.envs.mujoco import mujoco_env
@@ -134,9 +135,7 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             'y_velocity': y_velocity,
             'x_vel_w': self.velocity_weight['x'],
             'y_vel_w': self.velocity_weight['y'],
-            'goal': self.goal,
         }
-        observation = self.append_goal_to_state(observation)
         return observation, reward, done, info
 
     def _get_obs(self):
@@ -165,8 +164,7 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
 
         return observation
 
-    def append_goal_to_state(self, obs):
-        goal = np.array([self.velocity_weight['x'], self.velocity_weight['y']])
+    def append_goal_to_state(self, obs, goal):
         x = np.concatenate((obs, goal))
         return x
 
@@ -176,13 +174,8 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             self.velocity_weight['y'] = np.random.choice([0, 1, -1])
         elif self.multitask_for_transfer:
             pass
-        
-
-    def reset(self):
-        obs = mujoco_env.MujocoEnv.reset(self)
-        self.reset_goal()
-        x = self.append_goal_to_state(obs)
-        return x
+        self.goal = np.array([self.velocity_weight['x'], self.velocity_weight['y']])
+        return copy.deepcopy(self.goal)
 
     def viewer_setup(self):
         for key, value in DEFAULT_CAMERA_CONFIG.items():

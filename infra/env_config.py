@@ -60,22 +60,22 @@ def initialize_environment(args):
         new_file += '_vel'
         env_args = {'velocity_weight': vw, 
                     'multitask': args.multitask, 
-                    'multitask_for_transfer': args.multitask_for_transfer}
+                    'multitask_for_transfer': args.multitask_for_transfer,
+                    }
 
     if 'goal' in args.env_type:
         # goal
         new_file += '_goal'
         env_args = {'goal_distance': args.goal_dist,
-                    'exclude_current_positions_from_observation': False}
+                    'exclude_current_positions_from_observation': False
+                    }
 
-    root = get_env_root()
-    replace_file(root, orig_file='ant_v3.py', new_file=new_file+'.py')
+    if args.debug:
+        root = get_env_root()
+        replace_file(root, orig_file='ant_v3.py', new_file=new_file+'.py')
 
     ######################################################
-    # env = gym.make(args.env_name, velocity_weight=vw, goal_distance=args.goal_dist, exclude_current_positions_from_observation=False)
-    # env = gym.make(args.env_name, velocity_weight=vw)
     env = gym.make(args.env_name, **env_args)
-
     # env = multitask(env)  # this should append the task to the state
 
     # env = gym.make(args.env_name, 

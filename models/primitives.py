@@ -56,7 +56,7 @@ class PrimitivePolicy(GaussianPolicy):
     """
 
     """
-    def __init__(self, encoder, bottleneck_dim, decoder_dims, device, fixed_var=False, vib=False):
+    def __init__(self, encoder, bottleneck_dim, decoder_dims, device, id, fixed_var=False, vib=False):
         super(PrimitivePolicy, self).__init__()
         self.outdim = decoder_dims[-1]
         self.encoder = encoder
@@ -64,7 +64,7 @@ class PrimitivePolicy(GaussianPolicy):
         self.bottleneck = bottleneck(encoder.dims[-1], bottleneck_dim, device=device)
         self.decoder = nn.Linear(bottleneck_dim, decoder_dims[0])
         self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_var=fixed_var)
-        self.name = 'primitive'
+        self.name = 'primitive-{}'.format(id)
 
     def forward(self, x):
         x = self.encoder(x)

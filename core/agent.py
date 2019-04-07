@@ -8,15 +8,20 @@ import torch.optim as optim
 import copy
 
 # This thing should just take in a policy and environment and just run it.
-def sample_single_trajectory(env, policy, custom_reward, mean_action, render, running_state, maxeplen, memory):
+def sample_single_trajectory(env, policy, custom_reward, mean_action, render, running_state, maxeplen, memory, hide_goal):
 
     ######################################################
     # if render:
     #     goal = env.sample_goal_for_rollout()
     #     env.set_goal(goal)
     ######################################################
-
+    
     state = env.reset()
+    ############################
+    if not hide_goal:
+        goal = env.env.reset_goal()
+        state = env.env.append_goal_to_state(state, goal)
+    ############################
 
     if running_state is not None:
         state = running_state(state)
@@ -26,11 +31,16 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
 
     for t in range(maxeplen):
         state_var = tensor(state).unsqueeze(0)
-
         with torch.no_grad():
             action = policy.select_action(state_var, deterministic=mean_action)[0].numpy()
         action = int(action) if policy.is_disc_action else action.astype(np.float64)
         next_state, reward, done, info = env.step(action)
+
+        ############################
+        if not hide_goal:
+            next_state = env.env.append_goal_to_state(next_state, goal)
+        ############################
+
         reward_episode += reward
         if running_state is not None:
             next_state = running_state(next_state)
@@ -64,7 +74,7 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
 
 # This thing should just take in a policy and environment and just run it.
 # Could I imagine calling this for the primitives?
-def collect_samples(pid, queue, env, policy, custom_reward, mean_action, render, running_state, min_batch_size, maxeplen):
+def collect_samples(pid, queue, env, policy, custom_reward, mean_action, render, running_state, min_batch_size, maxeplen, hide_goal):
     torch.randn(pid)
     log = dict()
     memory = Memory()
@@ -82,7 +92,7 @@ def collect_samples(pid, queue, env, policy, custom_reward, mean_action, render,
     # avg_episode_data = []
 
     while num_steps < min_batch_size:
-        episode_data, t = sample_single_trajectory(env, policy, custom_reward, mean_action, render, running_state, maxeplen, memory)
+        episode_data, t = sample_single_trajectory(env, policy, custom_reward, mean_action, render, running_state, maxeplen, memory, hide_goal)
 
         reward_episode = np.sum([e['reward_total'] for e in episode_data])
 
@@ -164,21 +174,21 @@ class Agent:
             assert False
         self.optimizer = {'policy_opt': self.policy_optimizer, 'value_opt': self.value_optimizer}
 
-    def collect_samples(self, min_batch_size, deterministic=False, render=False):
+    def collect_samples(self, policy, min_batch_size, deterministic=False, render=False, hide_goal=False):
         t_start = time.time()
-        to_device(torch.device('cpu'), self.policy)
+        to_device(torch.device('cpu'), policy)
         thread_batch_size = int(math.floor(min_batch_size / self.num_threads))
         queue = multiprocessing.Queue()
         workers = []
 
         for i in range(self.num_threads-1):
-            worker_args = (i+1, queue, self.env, self.policy, self.custom_reward, determinisitic, render, self.running_state, thread_batch_size, self.args.maxeplen)
+            worker_args = (i+1, queue, self.env, policy, self.custom_reward, determinisitic, render, self.running_state, thread_batch_size, self.args.maxeplen, hide_goal)
             workers.append(multiprocessing.Process(target=collect_samples, args=worker_args))
         for worker in workers:
             worker.start()
 
-        memory, log = collect_samples(0, None, self.env, self.policy, self.custom_reward, 
-            deterministic, render, self.running_state, thread_batch_size, self.args.maxeplen)
+        memory, log = collect_samples(0, None, self.env, policy, self.custom_reward, 
+            deterministic, render, self.running_state, thread_batch_size, self.args.maxeplen, hide_goal)
 
         worker_logs = [None] * len(workers)
         worker_memories = [None] * len(workers)
@@ -193,7 +203,7 @@ class Agent:
         if self.num_threads > 1:
             log_list = [log] + worker_logs
             log = merge_log(log_list)
-        to_device(self.device, self.policy)
+        to_device(self.device, policy)
         t_end = time.time()
         log['sample_time'] = t_end - t_start
         log['action_mean'] = np.mean(np.vstack(batch.action), axis=0)
