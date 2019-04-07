@@ -406,6 +406,12 @@ def main(args):
     exp = Experiment(agent, env, rl_alg, logger, running_state, args)
     exp.main_loop()
 
+def visualize_params(dict_of_models):
+    for k, v in dict_of_models.items():
+        print('#'*20 + ' {} '.format(k) + '#'*(80-len(k)-2-20))
+        visualize_parameters(v)
+    print('#'*80)
+
 def main_transfer(args):
     args = process_args(args)
     assert args.policy == 'composite'
@@ -422,9 +428,10 @@ def main_transfer(args):
     policy_net, value_net = initialize_actor_critic(env, device)
 
     print('Initial')
-    visualize_parameters(policy_net.weight_network)
-    visualize_parameters(value_net)
-    # assert False
+    visualize_params({
+        'Weight Network': policy_net.weight_network,
+        'Value Network': value_net,
+        'Primitive 0': policy_net.primitives[0]})
 
     """create agent"""
     agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
@@ -435,17 +442,19 @@ def main_transfer(args):
     exp.main_loop()
 
     print('After Training')
-    visualize_parameters(policy_net.weight_network)
-    visualize_parameters(value_net)
-    visualize_parameters(policy_net.primitives[0])
+    visualize_params({
+        'Weight Network': policy_net.weight_network,
+        'Value Network': value_net,
+        'Primitive 0': policy_net.primitives[0]})
 
     # now reset the weight network and the value function.
     policy_net, value_net = reset_weightnet_critic(env, agent.policy, device)
 
     print('After Reset')
-    visualize_parameters(policy_net.weight_network)
-    visualize_parameters(value_net)
-    visualize_parameters(policy_net.primitives[0])
+    visualize_params({
+    'Weight Network': policy_net.weight_network,
+    'Value Network': value_net,
+    'Primitive 0': policy_net.primitives[0]})
 
     agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
     logger = create_logger(lambda params: build_expname(args=params, ext='_transfer'), args)  # with transfer tag
@@ -455,10 +464,10 @@ def main_transfer(args):
     exp.main_loop()
 
     print('After Transfer')
-    visualize_parameters(policy_net.weight_network)
-    visualize_parameters(value_net)
-    visualize_parameters(policy_net.primitives[0])
-
+    visualize_params({
+        'Weight Network': policy_net.weight_network,
+        'Value Network': value_net,
+        'Primitive 0': policy_net.primitives[0]})
 
 if __name__ == '__main__':
     # main(args)

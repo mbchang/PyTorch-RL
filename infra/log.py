@@ -335,6 +335,6 @@ def visualize_parameters(model, aString=None):
         print(aString)
     for n, p in model.named_parameters():
         if p.grad is None:
-            print(n, p.size(), p.data.norm(), "No grad")
+            print('\t', n, p.size(), p.data.norm(), "No grad")
         else:
-            print(n, p.size(), p.data.norm(), p.grad.data.norm(), torch.max(p.grad.data))
+            print('\t', n, p.size(), p.data.norm(), p.grad.data.norm(), torch.max(p.grad.data))
