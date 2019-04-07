@@ -216,19 +216,22 @@ class Experiment():
                 render=True,
                 hide_goal=hide_goal)
 
-        best_episode_data = test_log['best_episode_data']
-        best_merged_episode_data = merge_log(best_episode_data)
-        self.logger.printf('Best Episode Data')
-        self.logger.printf(display_stats(best_merged_episode_data))
-        worst_episode_data = test_log['worst_episode_data']
-        worst_merged_episode_data = merge_log(worst_episode_data)
-        self.logger.printf('Worst Episode Data')
-        self.logger.printf(display_stats(worst_merged_episode_data))
-
+        best_episode_data = self.log(test_log, i_iter, policy.name)
         self.logger.printf('Test {}\tT_sample {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
         i_iter, test_log['sample_time'], test_log['min_reward'], test_log['max_reward'], test_log['avg_reward']))
         to_device(self.agent.device, policy)
         self.visualize(policy_name=policy.name, i_episode=i_iter, episode_data=best_episode_data, mode='test')
+
+    def log(self, log, i_iter, policy_name):
+        best_episode_data = log['best_episode_data']
+        best_merged_episode_data = merge_log(best_episode_data)
+        self.logger.printf('Best Episode Data: {}'.format(policy_name))
+        self.logger.printf(display_stats(best_merged_episode_data))
+        worst_episode_data = log['worst_episode_data']
+        worst_merged_episode_data = merge_log(worst_episode_data)
+        self.logger.printf('Worst Episode Data: {}'.format(policy_name))
+        self.logger.printf(display_stats(worst_merged_episode_data))
+        return best_episode_data
 
     def main_loop(self):
         for i_iter in range(args.max_iter_num+1):
@@ -257,15 +260,7 @@ class Experiment():
             self.logger.printf(display_stats(self.rl_alg.aggregate_stats()))
 
             if should_log:
-                best_episode_data = log['best_episode_data']
-                best_merged_episode_data = merge_log(best_episode_data)
-                self.logger.printf('Best Episode Data')
-                self.logger.printf(display_stats(best_merged_episode_data))
-                worst_episode_data = log['worst_episode_data']
-                worst_merged_episode_data = merge_log(worst_episode_data)
-                self.logger.printf('Worst Episode Data')
-                self.logger.printf(display_stats(worst_merged_episode_data))
-
+                best_episode_data = self.log(log, i_iter, self.agent.policy.name)
                 self.logger.printf('{}\tT_sample {:.4f}\tT_update {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
                     i_iter, log['sample_time'], t1-t0, log['min_reward'], log['max_reward'], log['avg_reward']))
 
