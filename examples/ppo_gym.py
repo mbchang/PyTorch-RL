@@ -377,6 +377,7 @@ def reset_weightnet_critic(env, composite_policy, device):
     weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[hdim], bottleneck_dim=hdim, decoder_dims=[hdim, num_primitives], device=device)
     composite_policy.weight_network = weight_network
     value_net = Value(state_dim+goal_dim)
+    composite_policy.freeze_primitives = True
     composite_policy.to(device)
     value_net.to(device)
     return composite_policy, value_net

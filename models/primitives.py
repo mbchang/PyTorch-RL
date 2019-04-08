@@ -74,7 +74,7 @@ class PrimitivePolicy(GaussianPolicy):
         return mu, torch.exp(logstd), kl
 
 class CompositePolicy(GaussianPolicy):
-    def __init__(self, weight_network, primitives, obs_dim):
+    def __init__(self, weight_network, primitives, obs_dim, freeze_primitives=False):
         super(CompositePolicy, self).__init__()
         self.primitives = primitives
         self.weight_network = weight_network
@@ -82,11 +82,16 @@ class CompositePolicy(GaussianPolicy):
         self.outdim = self.primitives[0].outdim
         self.name = 'composite'
         self.obs_dim = obs_dim
+        self.freeze_primitives = freeze_primitives
 
     def forward(self, state):
         state, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
         bsize = state.size(0)
-        mus, stds, kls = zip(*[p(state) for p in self.primitives])  # list of length k of (bsize, adim)
+        if self.freeze_primitives:
+            with torch.no_grad():
+                mus, stds, kls = zip(*[p(state) for p in self.primitives])  # list of length k of (bsize, adim)
+        else:
+            mus, stds, kls = zip(*[p(state) for p in self.primitives])  # list of length k of (bsize, adim)
         mus = torch.stack(mus, dim=1)  # (bsize, k, outdim)
         stds = torch.stack(stds, dim=1)  # (bsize, k, outdim)
         kls = torch.stack(kls, dim=1)  # (bsize)
