@@ -44,6 +44,9 @@ def initialize_environment(args):
     xw, yw = map(int, vw_str.split())
     vw = {'x': xw, 'y': yw}
 
+    train_str, test_str = args.tasks.split('_')
+    tasks = {'train': list(map(int, list(train_str))), 'test': list(map(int, list(test_str)))}
+
     # NOTE: you cannot have multiple parallel runs work with the different environments!
     new_file = args.env_name.replace('-', '_').lower()
 
@@ -60,6 +63,7 @@ def initialize_environment(args):
         new_file += '_vel'
         env_args = {'velocity_weight': vw, 
                     'multitask': args.multitask, 
+                    'tasks': tasks,
                     }
 
     if 'goal' in args.env_type:

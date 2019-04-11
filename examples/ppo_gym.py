@@ -120,6 +120,10 @@ parser.add_argument('--nprims', type=int, default=1, metavar='N',
 parser.add_argument('--for-transfer', action='store_true',
                     help='multitask for transfer')
 
+parser.add_argument('--tasks', type=str, default='1234_1234',
+                    help='quadrants for training_testing (default: 1234_1234)')
+parser.add_argument('--nsamp', type=int, default=1, metavar='N',
+                    help='number of times we sample from test (default: 1)')
 
 args = parser.parse_args()
 
@@ -178,9 +182,12 @@ class Experiment():
 
     def visualize(self, policy_name, i_episode, episode_data, mode, sample_num):
         frames = np.array([e['frame'] for e in episode_data])
-        if self.env.env.multitask or self.env.env.multitask_for_transfer:
-            goal = episode_data[0]['goal']
-            label = '_g[{:.3f},{:.3f}]'.format(goal[0], goal[1])
+        if self.env.env.multitask:
+            # goal = episode_data[0]['goal']
+            # label = '_g[{:.3f},{:.3f}]'.format(goal[0], goal[1])
+            goal_x, goal_y = episode_data[0]['goal'] # radians
+            goal_angle = np.arctan2(goal_y, goal_x)*180/np.pi
+            label = '_g{:.3f}'.format(goal_angle)
         else:
             label = ''
         clip = ImageSequenceClip(list(frames), fps=30).resize(0.5)
@@ -247,7 +254,7 @@ class Experiment():
             should_visualize = i_iter % self.args.visualize_every == 0
 
             if should_visualize:
-                for sn in range(5):
+                for sn in range(args.nsamp):
                     self.test(policy=self.agent.policy, i_iter=i_iter, hide_goal=False, sample_num=sn)
                 if self.args.policy == 'composite':
                     for p in self.agent.policy.primitives:
@@ -295,6 +302,7 @@ def build_expname(args, ext=''):
     expname += '_hw-{}'.format(args.healthy_weight)
     expname += '_ts-{}'.format(args.task_scale)
     expname += '_np-{}'.format(args.nprims)
+    expname += '_tt-{}'.format(args.tasks)
 
     expname += ext
     if args.debug: expname+= '_debug'
@@ -319,8 +327,9 @@ def process_args(args):
         args.min_batch_size = 128
         args.num_threads = 1
         args.num_test = 5
-        # args.nprims = 2
+        args.nprims = 2
         args.plr = 1e-2
+        args.nsamp = 2
     return args
 
 def initialize_actor_critic(env, device):
