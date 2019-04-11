@@ -195,8 +195,6 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     #     return copy.deepcopy(self.goal)
 
 
-
-
     def construct_sampling_set(self, tasks):
         sampling_set = []
         if 1 in tasks:
@@ -208,7 +206,6 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         if 4 in tasks:
             sampling_set.append([240, 360])
         return sampling_set
-
 
     def train_mode(self):
         self.sampling_set = self.construct_sampling_set(self.train_tasks)
@@ -231,26 +228,8 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             self.velocity_weight['x'] = x
             self.velocity_weight['y'] = y
 
-            # print(region_id)
-            # print(region)
-            # print(angle)
-            # assert False
-            # vw = self.combos[np.random.randint(len(self.combos))]
-            # self.velocity_weight['x'] = vw[0]
-            # self.velocity_weight['y'] = vw[1]
-
-
         self.goal = np.array([self.velocity_weight['x'], self.velocity_weight['y']])
         return copy.deepcopy(self.goal)
-
-
-
-
-
-
-
-
-
 
     def viewer_setup(self):
         for key, value in DEFAULT_CAMERA_CONFIG.items():
