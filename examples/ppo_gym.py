@@ -181,7 +181,6 @@ class Experiment():
         if self.env.env.multitask or self.env.env.multitask_for_transfer:
             goal = episode_data[0]['goal']
             label = '_g[{:.3f},{:.3f}]'.format(goal[0], goal[1])
-            # label = '_g{}'.format(episode_data[0]['goal'])
         else:
             label = ''
         clip = ImageSequenceClip(list(frames), fps=30).resize(0.5)
