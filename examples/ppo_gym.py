@@ -176,14 +176,16 @@ class Experiment():
                     best_episode_data = copy.deepcopy(episode_data)
         return best_episode_data
 
-    def visualize(self, policy_name, i_episode, episode_data, mode):
+    def visualize(self, policy_name, i_episode, episode_data, mode, sample_num):
         frames = np.array([e['frame'] for e in episode_data])
         if self.env.env.multitask or self.env.env.multitask_for_transfer:
-            label = '_g{}'.format(episode_data[0]['goal'])
+            goal = episode_data[0]['goal']
+            label = '_g[{:.2f},{:.2f}]'.format(goal[0], goal[1])
+            # label = '_g{}'.format(episode_data[0]['goal'])
         else:
             label = ''
         clip = ImageSequenceClip(list(frames), fps=30).resize(0.5)
-        clip.write_gif('{}/{}-{}-{}{}.gif'.format(self.logger.logdir, policy_name, mode, i_episode, label), fps=30)
+        clip.write_gif('{}/{}-{}-{}{}_{}.gif'.format(self.logger.logdir, policy_name, mode, i_episode, label, sample_num), fps=30)
 
     def save(self, i_iter):
         metric_keys = [
@@ -211,7 +213,7 @@ class Experiment():
                     open(os.path.join(assets_dir(), 'learned_models/{}_ppo.p'.format(args.env_name)), 'wb'))
         to_device(device, self.agent.policy, self.agent.valuefn)
 
-    def test(self, policy, i_iter, hide_goal):
+    def test(self, policy, i_iter, hide_goal, sample_num=0):
         to_device(torch.device('cpu'), policy)
         with torch.no_grad():
             test_batch, test_log = self.agent.collect_samples(
@@ -222,10 +224,10 @@ class Experiment():
                 hide_goal=hide_goal)
 
         best_episode_data = self.log(test_log, i_iter, policy.name)
-        self.logger.printf('Test {}\tT_sample {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
-        i_iter, test_log['sample_time'], test_log['min_reward'], test_log['max_reward'], test_log['avg_reward']))
+        self.logger.printf('Test {} Sample {}\tT_sample {:.4f}\tR_min {:.2f}\tR_max {:.2f}\tR_avg {:.2f}'.format(
+        i_iter, sample_num, test_log['sample_time'], test_log['min_reward'], test_log['max_reward'], test_log['avg_reward']))
         to_device(self.agent.device, policy)
-        self.visualize(policy_name=policy.name, i_episode=i_iter, episode_data=best_episode_data, mode='test')
+        self.visualize(policy_name=policy.name, i_episode=i_iter, episode_data=best_episode_data, mode='test', sample_num=sample_num)
 
     def log(self, log, i_iter, policy_name):
         best_episode_data = log['best_episode_data']
@@ -246,9 +248,11 @@ class Experiment():
             should_visualize = i_iter % self.args.visualize_every == 0
 
             if should_visualize:
-                self.test(policy=self.agent.policy, i_iter=i_iter, hide_goal=False)
-                for p in self.agent.policy.primitives:
-                    self.test(policy=p, i_iter=i_iter, hide_goal=True)
+                for sn in range(5):
+                    self.test(policy=self.agent.policy, i_iter=i_iter, hide_goal=False, sample_num=sn)
+                if self.args.policy == 'composite':
+                    for p in self.agent.policy.primitives:
+                        self.test(policy=p, i_iter=i_iter, hide_goal=True)
 
             """generate multiple trajectories that reach the minimum batch_size"""
             batch, log = self.agent.collect_samples(
@@ -337,13 +341,24 @@ def initialize_actor_critic(env, device):
                 policy_net = Policy(state_dim, action_dim, log_std=args.log_std)
                 value_net = Value(state_dim)
             elif args.policy == 'primitive':
+                # if args.debug:
+                #     encoder = Feedforward([state_dim, 64, 64], out_act=F.relu)
+                #     policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, id=0, fixed_var=args.fixed_var, vib=False)
+                # else:
+                #     encoder = Feedforward([state_dim, 128], out_act=F.relu)
+                #     policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device, id=0)
+                # value_net = Value(state_dim)
+
+                goal_dim = env.env.goal_dim
                 if args.debug:
-                    encoder = Feedforward([state_dim, 64, 64], out_act=F.relu)
+                    encoder = Feedforward([state_dim+goal_dim, 64, 64], out_act=F.relu)
                     policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, id=0, fixed_var=args.fixed_var, vib=False)
                 else:
-                    encoder = Feedforward([state_dim, 128], out_act=F.relu)
+                    encoder = Feedforward([state_dim+goal_dim, 128], out_act=F.relu)
                     policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device, id=0)
-                value_net = Value(state_dim)
+                value_net = Value(state_dim+goal_dim)
+
+
             elif args.policy == 'composite':
                 num_primitives = args.nprims
                 goal_dim = env.env.goal_dim
@@ -416,7 +431,7 @@ def visualize_params(dict_of_models, pfunc):
         visualize_parameters(v, pfunc)
     pfunc('#'*80)
 
-def main_transfer(args):
+def main_transfer_composite(args):
     args = process_args(args)
     assert args.policy == 'composite'
 
@@ -455,6 +470,7 @@ def main_transfer(args):
         'Primitive 0': policy_net.primitives[0]},
         pfunc=lambda x: logger.printf(x))
 
+    ######################################################################
 
     # now reset the weight network and the value function.
     policy_net, value_net = reset_weightnet_critic(env, agent.policy, device)
@@ -482,9 +498,77 @@ def main_transfer(args):
         'Primitive 0': policy_net.primitives[0]},
         pfunc=lambda x: logger.printf(x))
 
+def main_transfer_primitive(args):
+    args = process_args(args)
+    assert args.policy == 'primitive'
+
+    """environment"""
+    env = initialize_environment(args)
+
+    """seeding"""
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    env.seed(args.seed)
+
+    # """define actor and critic"""
+    policy_net, value_net = initialize_actor_critic(env, device)
+
+    """create agent"""
+    env.env.train_mode()
+    agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
+    logger = create_logger(build_expname, args)
+    initialize_logger(logger)
+
+    logger.printf('Initial')
+    visualize_params({
+        'Policy Network': policy_net,
+        'Value Network': value_net},
+        pfunc=lambda x: logger.printf(x))
+
+    rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
+    exp = Experiment(agent, env, rl_alg, logger, None, args)
+    exp.main_loop()
+
+    logger.printf('After Training')
+    visualize_params({
+        'Policy Network': policy_net,
+        'Value Network': value_net},
+        pfunc=lambda x: logger.printf(x))
+
+    ######################################################################
+
+    # now reset the weight network and the value function.
+    # policy_net, value_net = reset_weightnet_critic(env, agent.policy, device)
+    policy_net.zero_grad()
+    value_net.zero_grad()
+
+    env.env.test_mode()
+    agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
+    logger = create_logger(lambda params: build_expname(args=params, ext='_transfer'), args)  # with transfer tag
+    initialize_logger(logger)  # should save in the same folder as before
+
+    logger.printf('Initial for Transfer')
+    visualize_params({
+        'Policy Network': policy_net,
+        'Value Network': value_net},
+        pfunc=lambda x: logger.printf(x))
+
+    rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
+    exp = Experiment(agent, env, rl_alg, logger, None, args)
+    exp.main_loop()
+
+    logger.printf('After Transfer')
+    visualize_params({
+        'Policy Network': policy_net,
+        'Value Network': value_net},
+        pfunc=lambda x: logger.printf(x))
+
 if __name__ == '__main__':
     if args.for_transfer:
-        main_transfer(args)
+        if args.policy == 'primitive':
+            main_transfer_primitive(args)
+        else:
+            main_transfer_composite(args)
     else:
         main(args)
 

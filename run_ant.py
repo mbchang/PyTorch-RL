@@ -431,34 +431,74 @@ Running it again, but this time add a constant to the reward.
 #         i = 0
 
 
+# """
+# # 4/6/19
+
+# Multitask for velocity, varying the primitives. Transfer
+
+# """
+# optimizer = ['adam']
+# plr = [1e-5]
+# clr = [1e-4]
+# envs = ['Ant-v3']
+# policy = ['composite']
+# eplen = [200]
+# numtest = [100]
+# vweights = ['0 0']
+# nprims = [2, 4, 6, 8]
+
+# outputdir = 'runs/ant_test_multitask_vel_nprims_transfer_fp'
+
+# gpu = True
+# num_gpus = 2
+# i = 0
+
+# if gpu:
+#     os.system('export OMP_NUM_THREADS=1')
+
+# for o, p, c, e, l, n, vw, pi, np in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy, nprims):
+#     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+#     command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {} --nprims {}'.format(o, p, c, e, l, n, vw, pi, np)
+#     command += ' --for-transfer'
+#     command += ' --multitask'
+#     command += ' --outputdir {}'.format(outputdir)
+#     command += ' --printf'
+#     command += ' &'
+#     print(prefix + command)
+#     os.system(prefix + command)
+#     i += 1
+#     if i >= num_gpus:
+#         i = 0
+
+
 """
 # 4/6/19
 
-Multitask for velocity, varying the primitives. Transfer
+Multitask for velocity, for primitive. Transfer
 
 """
 optimizer = ['adam']
 plr = [1e-5]
 clr = [1e-4]
 envs = ['Ant-v3']
-policy = ['composite']
+policy = ['primitive']
 eplen = [200]
 numtest = [100]
 vweights = ['0 0']
-nprims = [2, 4, 6, 8]
+# nprims = [2, 4, 6, 8]
 
-outputdir = 'runs/ant_test_multitask_vel_nprims_transfer'
+outputdir = 'runs/ant_test_multitask_vel_prim_transfer'
 
 gpu = True
 num_gpus = 2
 i = 0
 
 if gpu:
-    os.system('export OMP_NUM_THREADS=1')
+    os.environ['OMP_NUM_THREADS'] = '1'
 
-for o, p, c, e, l, n, vw, pi, np in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy, nprims):
+for o, p, c, e, l, n, vw, pi in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy):
     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
-    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {} --nprims {}'.format(o, p, c, e, l, n, vw, pi, np)
+    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {}'.format(o, p, c, e, l, n, vw, pi)
     command += ' --for-transfer'
     command += ' --multitask'
     command += ' --outputdir {}'.format(outputdir)
