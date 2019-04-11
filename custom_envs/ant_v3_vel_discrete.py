@@ -25,7 +25,6 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
                  # Michael Changed
                  velocity_weight={'x': 1, 'y': 0},
                  multitask=False,
-                 tasks={'train': [1,2,3,4], 'test': [1,2,3,4]}
                  ######################################
                  ):
         utils.EzPickle.__init__(**locals())
@@ -50,8 +49,6 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         self.multitask = multitask
         self.goal = np.array([self.velocity_weight['x'], self.velocity_weight['y']])
         self.goal_dim = len(self.goal)
-        self.train_tasks = tasks['train']
-        self.test_tasks = tasks['test']
         ######################################
 
         mujoco_env.MujocoEnv.__init__(self, xml_file, 5)
@@ -171,86 +168,25 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         x = np.concatenate((obs, goal))
         return x
 
-
-
-
-    # def train_mode(self):
-    #     combos = list(itertools.product([0, -1, 1], [0, -1, 1]))
-    #     combos.remove((0,0))
-    #     train_combos = [(x, y) for x,y in combos if x*y == 0]
-    #     self.combos = train_combos
-
-    # def test_mode(self):
-    #     combos = list(itertools.product([0, -1, 1], [0, -1, 1]))
-    #     combos.remove((0,0))
-    #     train_combos = [(x, y) for x,y in combos if x*y != 0]
-    #     self.combos = train_combos
-
-    # def reset_goal(self):
-    #     if self.multitask:
-    #         vw = self.combos[np.random.randint(len(self.combos))]
-    #         self.velocity_weight['x'] = vw[0]
-    #         self.velocity_weight['y'] = vw[1]
-    #     self.goal = np.array([self.velocity_weight['x'], self.velocity_weight['y']])
-    #     return copy.deepcopy(self.goal)
-
-
-
-
-    def construct_sampling_set(self, tasks):
-        sampling_set = []
-        if 1 in tasks:
-            sampling_set.append([0, 90])
-        if 2 in tasks:
-            sampling_set.append([90, 180])
-        if 3 in tasks:
-            sampling_set.append([180, 240])
-        if 4 in tasks:
-            sampling_set.append([240, 360])
-        return sampling_set
-
-
     def train_mode(self):
-        self.sampling_set = self.construct_sampling_set(self.train_tasks)
+        combos = list(itertools.product([0, -1, 1], [0, -1, 1]))
+        combos.remove((0,0))
+        train_combos = [(x, y) for x,y in combos if x*y == 0]
+        self.combos = train_combos
 
     def test_mode(self):
-        self.sampling_set = self.construct_sampling_set(self.test_tasks)
+        combos = list(itertools.product([0, -1, 1], [0, -1, 1]))
+        combos.remove((0,0))
+        train_combos = [(x, y) for x,y in combos if x*y != 0]
+        self.combos = train_combos
 
     def reset_goal(self):
         if self.multitask:
-            num_regions = len(self.sampling_set)
-            # sample region
-            region_id = np.random.randint(num_regions)
-            region = self.sampling_set[region_id]
-            # given region sample an angle within
-            angle = np.random.uniform(low=region[0], high=region[1])
-            # convert angle into radians
-            rangle = angle*np.pi/180
-            x = np.cos(rangle)
-            y = np.sin(rangle)
-            self.velocity_weight['x'] = x
-            self.velocity_weight['y'] = y
-
-            # print(region_id)
-            # print(region)
-            # print(angle)
-            # assert False
-            # vw = self.combos[np.random.randint(len(self.combos))]
-            # self.velocity_weight['x'] = vw[0]
-            # self.velocity_weight['y'] = vw[1]
-
-
+            vw = self.combos[np.random.randint(len(self.combos))]
+            self.velocity_weight['x'] = vw[0]
+            self.velocity_weight['y'] = vw[1]
         self.goal = np.array([self.velocity_weight['x'], self.velocity_weight['y']])
         return copy.deepcopy(self.goal)
-
-
-
-
-
-
-
-
-
 
     def viewer_setup(self):
         for key, value in DEFAULT_CAMERA_CONFIG.items():
