@@ -33,7 +33,6 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
         state_var = tensor(state).unsqueeze(0)
         with torch.no_grad():
             action = policy.select_action(state_var, deterministic=mean_action)
-        # action = int(action) if policy.is_disc_action else action.astype(np.float64)
         env_action = policy.post_process(state_var, action)[0].numpy()  # but why doesn't it work if I do torch no grad in the post_process step of CompositeTransferPolicy?
         env_action = int(env_action) if policy.is_disc_action else env_action.astype(np.float64)
         next_state, reward, done, info = env.step(env_action)
