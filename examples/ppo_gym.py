@@ -183,8 +183,6 @@ class Experiment():
     def visualize(self, policy_name, i_episode, episode_data, mode, sample_num):
         frames = np.array([e['frame'] for e in episode_data])
         if self.env.env.multitask:
-            # goal = episode_data[0]['goal']
-            # label = '_g[{:.3f},{:.3f}]'.format(goal[0], goal[1])
             goal_x, goal_y = episode_data[0]['goal'] # radians
             goal_angle = np.arctan2(goal_y, goal_x)*180/np.pi
             label = '_g{:.3f}'.format(goal_angle)
