@@ -32,7 +32,7 @@ class GaussianPolicy(nn.Module):
         entropy = dist.entropy().view(bsize, 1)
         return {'log_prob': log_prob, 'kl': kl, 'entropy': entropy}
 
-    def post_process(self, action):
+    def post_process(self, state, action):
         return action
 
 class WeightNetwork(GaussianPolicy):
@@ -48,7 +48,7 @@ class WeightNetwork(GaussianPolicy):
         bottleneck = InformationBottleneck if vib else DeterministicBottleneck
         self.bottleneck = bottleneck(encoder_dims[-1], bottleneck_dim, device=device)
         self.goal_trunk = Feedforward([goal_dim] + encoder_dims + [bottleneck_dim])
-        self.decoder = Feedforward([bottleneck_dim*2]+decoder_dims)  # TODO put the sigmoid outside!
+        self.decoder = Feedforward([bottleneck_dim*2]+decoder_dims)
 
         self.std = 0.2
 
@@ -133,14 +133,23 @@ class CompositeTransferPolicy(CompositePolicy):
         super(CompositeTransferPolicy, self).__init__(weight_network, primitives, obs_dim, freeze_primitives=True)
 
     def forward(self, state):
-        weights = self.weight_network.select_action(state)
-        return weights
+        weights, std, kl = self.weight_network(state)
+        return weights, std, kl
 
-    def post_process(self, weights):
+    def select_action(self, state, deterministic=False):
+        return self.weight_network.select_action(state, deterministic)
+
+    def get_log_prob(self, state, action):
+        return self.weight_network.get_log_prob(state, action)
+
+    def post_process(self, state, weights):
+        obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        bsize = state.size(0)
+        ##############################
         weights = F.sigmoid(weights)
         broadcasted_weights = weights.view(bsize, self.k, 1)
         with torch.no_grad():
-            mus, stds, kls = zip(*[p(state) for p in self.primitives])  # list of length k of (bsize, adim)
+            mus, stds, kls = zip(*[p(obs) for p in self.primitives])  # list of length k of (bsize, adim)
         mus = torch.stack(mus, dim=1)  # (bsize, k, outdim)
         stds = torch.stack(stds, dim=1)  # (bsize, k, outdim)
         kls = torch.stack(kls, dim=1)  # (bsize)
