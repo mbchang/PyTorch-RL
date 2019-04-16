@@ -43,6 +43,7 @@ class WeightNetwork(GaussianPolicy):
         self.encoder_dims = encoder_dims
         self.bottleneck_dim = bottleneck_dim
         self.decoder_dims = decoder_dims
+        self.device=device
 
         self.state_trunk = Feedforward([state_dim] + encoder_dims, out_act=F.relu)
         bottleneck = InformationBottleneck if vib else DeterministicBottleneck

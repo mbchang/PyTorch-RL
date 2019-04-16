@@ -327,7 +327,7 @@ def process_args(args):
         args.min_batch_size = 128
         args.num_threads = 1
         args.num_test = 5
-        args.nprims = 4
+        args.nprims = 2
         args.plr = 1e-2
         args.nsamp = 2
     return args
