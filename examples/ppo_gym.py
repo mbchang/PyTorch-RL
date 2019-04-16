@@ -349,14 +349,6 @@ def initialize_actor_critic(env, device):
                 policy_net = Policy(state_dim, action_dim, log_std=args.log_std)
                 value_net = Value(state_dim)
             elif args.policy == 'primitive':
-                # if args.debug:
-                #     encoder = Feedforward([state_dim, 64, 64], out_act=F.relu)
-                #     policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, id=0, fixed_var=args.fixed_var, vib=False)
-                # else:
-                #     encoder = Feedforward([state_dim, 128], out_act=F.relu)
-                #     policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device, id=0)
-                # value_net = Value(state_dim)
-
                 goal_dim = env.env.goal_dim
                 if args.debug:
                     encoder = Feedforward([state_dim+goal_dim, 64, 64], out_act=F.relu)
@@ -365,8 +357,6 @@ def initialize_actor_critic(env, device):
                     encoder = Feedforward([state_dim+goal_dim, 128], out_act=F.relu)
                     policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device, id=0)
                 value_net = Value(state_dim+goal_dim)
-
-
             elif args.policy == 'composite':
                 num_primitives = args.nprims
                 goal_dim = env.env.goal_dim
@@ -553,7 +543,6 @@ def main_transfer_primitive(args):
     ######################################################################
 
     # now reset the weight network and the value function.
-    # policy_net, value_net = reset_weightnet_critic(env, agent.policy, device)
     policy_net.zero_grad()
     value_net.zero_grad()
 
