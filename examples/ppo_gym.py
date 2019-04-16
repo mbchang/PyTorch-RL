@@ -398,11 +398,18 @@ def reset_weightnet_critic(env, composite_policy, device):
     num_primitives = args.nprims
     hdim = 64 if args.debug else 128
     weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[hdim], bottleneck_dim=hdim, decoder_dims=[hdim, num_primitives], device=device)
+
     composite_policy.weight_network = weight_network
     value_net = Value(state_dim+goal_dim)
     composite_policy.freeze_primitives = True
     composite_policy.to(device)
     value_net.to(device)
+
+    # policy_net = CompositeTransferPolicy(weight_network=weight_network, primitives=composite_policy.primitives, obs_dim=state_dim)
+    # value_net = Value(state_dim+goal_dim)
+    # policy_net.to(device)
+    # value_net.to(device)
+
     return composite_policy, value_net
 
 def main(args):

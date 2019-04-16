@@ -34,7 +34,8 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
         with torch.no_grad():
             action = policy.select_action(state_var, deterministic=mean_action)[0].numpy()
         action = int(action) if policy.is_disc_action else action.astype(np.float64)
-        next_state, reward, done, info = env.step(action)
+        env_action = policy.post_process(action)
+        next_state, reward, done, info = env.step(env_action)
 
         ############################
         if not hide_goal:

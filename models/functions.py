@@ -24,9 +24,6 @@ class Feedforward(nn.Module):
         for i in range(len(self.dims)-1):
             self.layers.append(nn.Linear(self.dims[i], self.dims[i+1]))
 
-        # if custom_init:
-        #     self.apply(init_weights)
-
     def forward(self, x):
         for i, layer in enumerate(self.layers):
             if i == len(self.layers)-1:

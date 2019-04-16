@@ -32,9 +32,14 @@ class GaussianPolicy(nn.Module):
         entropy = dist.entropy().view(bsize, 1)
         return {'log_prob': log_prob, 'kl': kl, 'entropy': entropy}
 
+    def post_process(self, action):
+        return action
+
 class WeightNetwork(GaussianPolicy):
     def __init__(self, state_dim, goal_dim, encoder_dims, bottleneck_dim, decoder_dims, device, vib=False):
         super(WeightNetwork, self).__init__()
+        self.state_dim = state_dim
+        self.goal_dim = goal_dim
         self.encoder_dims = encoder_dims
         self.bottleneck_dim = bottleneck_dim
         self.decoder_dims = decoder_dims
@@ -43,11 +48,12 @@ class WeightNetwork(GaussianPolicy):
         bottleneck = InformationBottleneck if vib else DeterministicBottleneck
         self.bottleneck = bottleneck(encoder_dims[-1], bottleneck_dim, device=device)
         self.goal_trunk = Feedforward([goal_dim] + encoder_dims + [bottleneck_dim])
-        self.decoder = Feedforward([bottleneck_dim*2]+decoder_dims, out_act=F.sigmoid)
+        self.decoder = Feedforward([bottleneck_dim*2]+decoder_dims)  # TODO put the sigmoid outside!
 
         self.std = 0.2
 
-    def forward(self, x, g):
+    def forward(self, state):
+        x, g = state[..., :self.state_dim], state[...,self.state_dim:]
         z, kl = self.bottleneck(self.state_trunk(x))
         goal_embedding = self.goal_trunk(g)
         h = torch.cat((z, goal_embedding), dim=1)
@@ -94,18 +100,21 @@ class CompositePolicy(GaussianPolicy):
         self.freeze_primitives = freeze_primitives
 
     def forward(self, state):
-        state, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
         bsize = state.size(0)
+        ##############################
+        weights, weights_std, weights_kl = self.weight_network(state)
+        weights = F.sigmoid(weights)
+        broadcasted_weights = weights.view(bsize, self.k, 1)
+        ##############################
         if self.freeze_primitives:
             with torch.no_grad():
-                mus, stds, kls = zip(*[p(state) for p in self.primitives])  # list of length k of (bsize, adim)
+                mus, stds, kls = zip(*[p(obs) for p in self.primitives])  # list of length k of (bsize, adim)
         else:
-            mus, stds, kls = zip(*[p(state) for p in self.primitives])  # list of length k of (bsize, adim)
+            mus, stds, kls = zip(*[p(obs) for p in self.primitives])  # list of length k of (bsize, adim)
         mus = torch.stack(mus, dim=1)  # (bsize, k, outdim)
         stds = torch.stack(stds, dim=1)  # (bsize, k, outdim)
         kls = torch.stack(kls, dim=1)  # (bsize)
-        weights, weights_std, weights_kl = self.weight_network(state, goal)
-        broadcasted_weights = weights.view(bsize, self.k, 1)
         ##############################
         weights_over_variance = broadcasted_weights/(stds*stds)  # (bsize, k, zdim)
         inverse_variance = torch.sum(weights_over_variance, dim=1)  # (bsize, zdim)
@@ -118,6 +127,30 @@ class CompositePolicy(GaussianPolicy):
         ##############################
         composite_kl = kls.sum()
         return composite_mu, composite_std, kls
+
+class CompositeTransferPolicy(CompositePolicy):
+    def __init__(self, weight_network, primitives, obs_dim):
+        super(CompositeTransferPolicy, self).__init__(weight_network, primitives, obs_dim, freeze_primitives=True)
+
+    def forward(self, state):
+        weights = self.weight_network.select_action(state)
+        return weights
+
+    def post_process(self, weights):
+        weights = F.sigmoid(weights)
+        broadcasted_weights = weights.view(bsize, self.k, 1)
+        with torch.no_grad():
+            mus, stds, kls = zip(*[p(state) for p in self.primitives])  # list of length k of (bsize, adim)
+        mus = torch.stack(mus, dim=1)  # (bsize, k, outdim)
+        stds = torch.stack(stds, dim=1)  # (bsize, k, outdim)
+        kls = torch.stack(kls, dim=1)  # (bsize)
+        ##############################
+        weights_over_variance = broadcasted_weights/(stds*stds)  # (bsize, k, zdim)
+        inverse_variance = torch.sum(weights_over_variance, dim=1)  # (bsize, zdim)
+        ##############################
+        weighted_mus = weights_over_variance * mus
+        composite_mu = torch.sum(weighted_mus, dim=1)/inverse_variance  # (bsize, zdim)
+        return composite_mu
 
 def debug2():
     state_dim = 60
