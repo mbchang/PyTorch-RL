@@ -35,6 +35,25 @@ class Feedforward(nn.Module):
                 x = self.act(layer(x))
         return x
 
+def standard_normal_prior(zdim, device):
+    prior_mu = torch.zeros(zdim).to(device)
+    prior_std = torch.ones(zdim).to(device)
+    prior = MultivariateNormal(loc=prior_mu, scale_tril=torch.diag(prior_std))
+    return prior
+
+def kl_standard_normal(dist, device):
+    zdim = dist.event_shape
+    prior = standard_normal_prior(zdim, device)
+    kl = torch.distributions.kl.kl_divergence(p=dist, q=prior)
+    return kl
+
+def reparametrize(mu, std, device):
+    bsize = mu.size(0)
+    dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
+    z = dist.rsample()
+    kl = kl_standard_normal(dist, device).view(bsize, 1)
+    return z, kl
+
 class InformationBottleneck(nn.Module):
     def __init__(self, hdim, zdim, device):
         super(InformationBottleneck, self).__init__()
@@ -43,23 +62,10 @@ class InformationBottleneck(nn.Module):
         self.device = device
         self.parameter_producer = GaussianParams(hdim=self.hdim, zdim=self.zdim)
 
-    def standard_normal_prior(self):
-        prior_mu = torch.zeros(self.zdim).to(self.get_device())
-        prior_std = torch.ones(self.zdim).to(self.get_device())
-        prior = MultivariateNormal(loc=prior_mu, scale_tril=torch.diag(prior_std))
-        return prior
-
-    def kl_standard_normal(self, dist):
-        prior = self.standard_normal_prior()
-        kl = torch.distributions.kl.kl_divergence(p=dist, q=prior)
-        return kl
-
     def forward(self, x):
         bsize = x.size(0)
         mu, logstd = self.parameter_producer(x)
-        dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(torch.exp(logstd)))
-        z = dist.rsample()
-        kl = self.kl_standard_normal(dist).view(bsize, 1)
+        z, kl = reparametrize(mu, torch.exp(logstd), device=self.get_device())
         return z, kl
 
     def get_device(self):

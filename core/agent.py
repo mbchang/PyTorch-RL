@@ -176,6 +176,7 @@ class Agent:
         self.optimizer = {'policy_opt': self.policy_optimizer, 'value_opt': self.value_optimizer}
 
     def collect_samples(self, policy, min_batch_size, deterministic=False, render=False, hide_goal=False):
+        assert self.num_threads == 1
         t_start = time.time()
         to_device(torch.device('cpu'), policy)
         thread_batch_size = int(math.floor(min_batch_size / self.num_threads))
@@ -183,7 +184,7 @@ class Agent:
         workers = []
 
         for i in range(self.num_threads-1):
-            worker_args = (i+1, queue, self.env, policy, self.custom_reward, determinisitic, render, self.running_state, thread_batch_size, self.args.maxeplen, hide_goal)
+            worker_args = (i+1, queue, self.env, policy, self.custom_reward, deterministic, render, self.running_state, thread_batch_size, self.args.maxeplen, hide_goal)
             workers.append(multiprocessing.Process(target=collect_samples, args=worker_args))
         for worker in workers:
             worker.start()
@@ -200,7 +201,6 @@ class Agent:
         for worker_memory in worker_memories:
             memory.append(worker_memory)
         batch = memory.sample()
-        assert self.num_threads == 1
         if self.num_threads > 1:
             log_list = [log] + worker_logs
             log = merge_log(log_list)

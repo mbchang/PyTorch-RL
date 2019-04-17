@@ -4,13 +4,14 @@ import torch.nn.functional as F
 from torch.distributions import Categorical
 from torch.distributions.multivariate_normal import MultivariateNormal
 
-from models.functions import Feedforward, InformationBottleneck, GaussianParams, DeterministicBottleneck
+from models.functions import Feedforward, InformationBottleneck, GaussianParams, DeterministicBottleneck, reparametrize
 
 
 class GaussianPolicy(nn.Module):
-    def __init__(self):
+    def __init__(self, device):
         super(GaussianPolicy, self).__init__()
         self.is_disc_action = False
+        self.device=device
 
     def forward(self, x):
         raise NotImplementedError
@@ -35,17 +36,23 @@ class GaussianPolicy(nn.Module):
     def post_process(self, state, action):
         return action
 
+    def get_device(self):
+        if next(self.parameters()).is_cuda:
+            return self.device
+        else:
+            return torch.device('cpu')
+
 class WeightNetwork(GaussianPolicy):
     def __init__(self, state_dim, goal_dim, encoder_dims, bottleneck_dim, decoder_dims, device, vib=False):
-        super(WeightNetwork, self).__init__()
+        super(WeightNetwork, self).__init__(device)
         self.state_dim = state_dim
         self.goal_dim = goal_dim
         self.encoder_dims = encoder_dims
         self.bottleneck_dim = bottleneck_dim
         self.decoder_dims = decoder_dims
-        self.device=device
 
         self.state_trunk = Feedforward([state_dim] + encoder_dims, out_act=F.relu)
+        vib = True
         bottleneck = InformationBottleneck if vib else DeterministicBottleneck
         self.bottleneck = bottleneck(encoder_dims[-1], bottleneck_dim, device=device)
         self.goal_trunk = Feedforward([goal_dim] + encoder_dims + [bottleneck_dim])
@@ -62,18 +69,12 @@ class WeightNetwork(GaussianPolicy):
         std = self.std*torch.ones(*weights.size()).to(self.get_device())
         return weights, std, kl
 
-    def get_device(self):
-        if next(self.parameters()).is_cuda:
-            return self.device
-        else:
-            return torch.device('cpu')
-
 class PrimitivePolicy(GaussianPolicy):
     """
 
     """
     def __init__(self, encoder, bottleneck_dim, decoder_dims, device, id, fixed_var=False, vib=False):
-        super(PrimitivePolicy, self).__init__()
+        super(PrimitivePolicy, self).__init__(device)
         self.outdim = decoder_dims[-1]
         self.encoder = encoder
         bottleneck = InformationBottleneck if vib else DeterministicBottleneck
@@ -90,14 +91,15 @@ class PrimitivePolicy(GaussianPolicy):
         return mu, torch.exp(logstd), kl
 
 class CompositePolicy(GaussianPolicy):
-    def __init__(self, weight_network, primitives, obs_dim, freeze_primitives=False):
-        super(CompositePolicy, self).__init__()
+    def __init__(self, weight_network, primitives, obs_dim, device, freeze_primitives=False):
+        super(CompositePolicy, self).__init__(device)
         self.primitives = primitives
         self.weight_network = weight_network
         self.k = len(self.primitives)
         self.outdim = self.primitives[0].outdim
         self.name = 'composite'
         self.obs_dim = obs_dim
+        # self.device = device
         self.freeze_primitives = freeze_primitives
 
     def get_composite_mu(self, mus, weights_over_variance, inverse_variance):
@@ -131,15 +133,16 @@ class CompositePolicy(GaussianPolicy):
     def forward(self, state):
         obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
         bsize = state.size(0)
-        weights, weights_std, weights_kl = self.weight_network(state)
+        weights, weights_std, weights_bottleneck_kl = self.weight_network(state)
+        weights, weights_kl = reparametrize(mu=weights, std=weights_std, device=self.get_device())
         weights = F.sigmoid(weights).view(bsize, self.k, 1)
         mus, stds, kls = self.execute_primitives(obs, no_grad=self.freeze_primitives)
         composite_mu, composite_std, kls = self.get_composite_parameters(mus, stds, kls, weights)
         return composite_mu, composite_std, kls
 
 class CompositeTransferPolicy(CompositePolicy):
-    def __init__(self, weight_network, primitives, obs_dim):
-        super(CompositeTransferPolicy, self).__init__(weight_network, primitives, obs_dim, freeze_primitives=True)
+    def __init__(self, weight_network, primitives, obs_dim, device):
+        super(CompositeTransferPolicy, self).__init__(weight_network, primitives, obs_dim, device, freeze_primitives=True)
 
     def forward(self, state):
         weights, std, kl = self.weight_network(state)
@@ -158,6 +161,62 @@ class CompositeTransferPolicy(CompositePolicy):
         mus, stds, kls = self.execute_primitives(obs, no_grad=True)
         composite_mu, composite_std, kls = self.get_composite_parameters(mus, stds, kls, weights)
         return composite_mu
+
+class LatentSpacePolicy(GaussianPolicy):
+    def __init__(self, goal_embedder, network_dims, outdim, obs_dim, device):
+        super(LatentSpacePolicy, self).__init__(device)
+        self.goal_embedder = goal_embedder
+        self.network_dims = network_dims
+        self.outdim = outdim
+        self.parameter_producer = GaussianParams(network_dims[-1], outdim, custom_init=True)
+        self.obs_dim = obs_dim
+        self.name = 'latent'
+
+    def forward(self, state):
+        obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        bsize = state.size(0)
+        goal_mu, goal_std, goal_bottleneck_kl = self.goal_embedder(goal)
+        goal_embedding, goal_embedding_kl = reparametrize(mu=goal_mu, std=goal_std, device=self.get_device())
+        inp = torch.cat((obs, goal_embedding), dim=-1)
+        h = F.relu(self.network(inp))
+        mu, logstd = self.parameter_producer(h)
+        return mu, torch.exp(logstd), goal_embedding_kl
+
+class LatentTransferPolicy(GaussianPolicy):
+    def __init__(self, goal_embedder, network_dims, outdim, obs_dim, device):
+        super(LatentSpacePolicy, self).__init__(device)
+        self.goal_embedder = goal_embedder
+        self.network_dims = network_dims
+        self.outdim = outdim
+        self.parameter_producer = GaussianParams(network_dims[-1], outdim, custom_init=True)
+        self.obs_dim = obs_dim
+        self.name = 'latent'
+
+    def forward(self, state):
+        obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        bsize = state.size(0)
+        goal_mu, goal_std, goal_bottleneck_kl = self.goal_embedder(goal)
+        goal_embedding, goal_embedding_kl = reparametrize(mu=goal_mu, std=goal_std, device=self.get_device())
+        inp = torch.cat((obs, goal_embedding), dim=-1)
+        h = F.relu(self.network(inp))
+        mu, logstd = self.parameter_producer(h)
+        return mu, torch.exp(logstd), goal_embedding_kl
+
+class GoalEmbedder(GaussianPolicy):
+    def __init__(self, dims):
+        assert len(dims) >= 3
+        self.dims = dims
+        self.network = Feedforward(dims=dims[:-2], out_act=F.relu)
+        self.bottleneck = DeterministicBottleneck(self.dims[-3], self.dims[-2])
+        self.parameter_producer = GaussianParams(self.dims[-2], self.self.dims[-1])
+
+    def forward(self, state):
+        obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        h = self.network(obs) # ignore the goal
+        z, kl = self.bottleneck(h)  # dummy kl
+        mu, logstd = self.parameter_producer(z)
+        return mu, torch.exp(logstd), kl
+
 
 def debug2():
     state_dim = 60

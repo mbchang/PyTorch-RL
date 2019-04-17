@@ -362,7 +362,7 @@ def initialize_actor_critic(env, device):
                 encoders = [Feedforward([state_dim, hdim], out_act=F.relu) for i in range(num_primitives)]
                 primitive_builder = lambda e, i: PrimitivePolicy(encoder=e, bottleneck_dim=hdim, decoder_dims=[hdim, action_dim], device=device, id=i)
                 weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[hdim], bottleneck_dim=hdim, decoder_dims=[hdim, num_primitives], device=device)
-                policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e, i) for i, e in enumerate(encoders)]), obs_dim=state_dim) 
+                policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e, i) for i, e in enumerate(encoders)]), obs_dim=state_dim, device=device) 
                 value_net = Value(state_dim+goal_dim)
             else:
                 False
