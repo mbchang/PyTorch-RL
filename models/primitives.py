@@ -71,9 +71,6 @@ class WeightNetwork(GaussianPolicy):
         return weights, std, kl, {}
 
 class PrimitivePolicy(GaussianPolicy):
-    """
-
-    """
     def __init__(self, encoder, bottleneck_dim, decoder_dims, device, id, fixed_var=False, vib=False):
         super(PrimitivePolicy, self).__init__(device)
         self.outdim = decoder_dims[-1]
