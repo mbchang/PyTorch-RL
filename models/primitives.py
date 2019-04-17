@@ -53,21 +53,21 @@ class WeightNetwork(GaussianPolicy):
         self.decoder_dims = decoder_dims
 
         self.state_trunk = Feedforward([state_dim] + encoder_dims, out_act=F.relu)
-        vib = True
         bottleneck = InformationBottleneck if vib else DeterministicBottleneck
         self.bottleneck = bottleneck(encoder_dims[-1], bottleneck_dim, device=device)
         self.goal_trunk = Feedforward([goal_dim] + encoder_dims + [bottleneck_dim])
-        self.decoder = Feedforward([bottleneck_dim*2]+decoder_dims)
-
-        self.std = 0.2
+        self.decoder = Feedforward([bottleneck_dim*2, decoder_dims[0]])
+        fixed_var = False  # but this is True during transfer
+        self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_var=fixed_var)
 
     def forward(self, state):
         x, g = state[..., :self.state_dim], state[...,self.state_dim:]
         z, kl = self.bottleneck(self.state_trunk(x))
         goal_embedding = self.goal_trunk(g)
         h = torch.cat((z, goal_embedding), dim=1)
-        weights = self.decoder(h)
-        std = self.std*torch.ones(*weights.size()).to(self.get_device())
+        h = self.decoder(h)
+        weights, logstd = self.parameter_producer(h)
+        std = torch.exp(logstd)  # this should around 0.2 or 0.3
         return weights, std, kl, {}
 
 class PrimitivePolicy(GaussianPolicy):

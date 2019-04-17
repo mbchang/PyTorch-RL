@@ -116,7 +116,7 @@ class PPO():
 
         if 'weight_entropy' in info:
             weight_entropy = info['weight_entropy']
-            policy_loss -= self.args.entropy_coeff * weight_entropy.mean()
+            policy_loss -= self.args.weight_entropy_coeff * weight_entropy.mean()
 
         self.agent.policy_optimizer.zero_grad()
         policy_loss.backward()

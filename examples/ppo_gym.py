@@ -73,6 +73,8 @@ parser.add_argument('--klw', type=float, default=0.0004,
                     help='KL for info bottlneeck for weight')
 parser.add_argument('--entropy-coeff', type=float, default=0.005,
                     help='KL for info bottlneeck for weight')
+parser.add_argument('--weight-entropy-coeff', type=float, default=0.001,
+                    help='KL for info bottlneeck for weight')
 
 parser.add_argument('--maxeplen', type=int, default=10000, metavar='N',
                     help='maximal number of main iterations (default: 10000)')
@@ -393,7 +395,7 @@ def reset_weightnet_critic(env, composite_policy, device):
     # composite_policy.to(device)
     # value_net.to(device)
 
-    composite_policy = CompositeTransferPolicy(weight_network=weight_network, primitives=composite_policy.primitives, obs_dim=state_dim)
+    composite_policy = CompositeTransferPolicy(weight_network=weight_network, primitives=composite_policy.primitives, obs_dim=state_dim, device=device)
     value_net = Value(state_dim+goal_dim)
     composite_policy.to(device)
     value_net.to(device)
