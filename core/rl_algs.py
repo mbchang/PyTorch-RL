@@ -1,3 +1,4 @@
+import copy
 import math
 import numpy as np
 import torch
@@ -26,22 +27,24 @@ class PPO():
     def reset_record(self):
         self.log = defaultdict(dict)
 
-    def aggregate_stats_per_epoch(self):
-        stats = defaultdict(dict)
-        aggregators = {'total': np.sum, 'avg': np.mean, 'max': np.max, 'min': np.min, 'std': np.std}
+    # def aggregate_stats_per_epoch(self):
+    #     stats = defaultdict(dict)
+    #     aggregators = {'total': np.sum, 'avg': np.mean, 'max': np.max, 'min': np.min, 'std': np.std}
 
-        # first merge within the epoch and see how that goes
-        for e in self.log:
-            for m in ['num_clipped', 'ratio_clipped', 'kl', 'value_loss', 'policy_surr', 'policy_loss']:
-                metric_data = [v[m] for k, v in self.log[e].items()]
-                for a in aggregators:
-                    stats[e]['{}_{}'.format(a, m)] = aggregators[a](metric_data)
-        return stats
+    #     # first merge within the epoch and see how that goes
+    #     for e in self.log:
+    #         for m in ['num_clipped', 'ratio_clipped', 'kl', 'value_loss', 'policy_surr', 'policy_loss']:
+    #             metric_data = [v[m] for k, v in self.log[e].items()]
+    #             for a in aggregators:
+    #                 stats[e]['{}_{}'.format(a, m)] = aggregators[a](metric_data)
+    #     return stats
 
     def aggregate_stats(self):
         stats = defaultdict(dict)
         aggregators = {'avg': np.mean, 'max': np.max, 'min': np.min, 'std': np.std}
-        for m in ['num_clipped', 'ratio_clipped', 'kl', 'value_loss', 'policy_surr', 'policy_loss', 'entropy']:
+        metrics = copy.deepcopy(list(self.log[0][0].keys()))
+        metrics.remove('bsize')
+        for m in metrics:
             metric_data = []
             for e in self.log:
                 epoch_metric_data = [v[m] for k, v in self.log[e].items()]
@@ -100,6 +103,8 @@ class PPO():
         log_probs = info['log_prob']
         entropy = info['entropy']
         kl = info['kl']
+        if 'weight_entropy' in info:
+            weight_entropy = info['weight_entropy']
 
         ratio = torch.exp(log_probs - fixed_log_probs)
         surr1 = ratio * advantages
@@ -108,6 +113,11 @@ class PPO():
         entropy_penalty = self.args.entropy_coeff * entropy.mean()  # mean over batch
         ib_penalty = self.args.klp * kl.mean()  # mean over batch
         policy_loss = policy_surr + ib_penalty - entropy_penalty  # TODO: add regularization of action mean
+
+        if 'weight_entropy' in info:
+            weight_entropy = info['weight_entropy']
+            policy_loss -= self.args.entropy_coeff * weight_entropy.mean()
+
         self.agent.policy_optimizer.zero_grad()
         policy_loss.backward()
         torch.nn.utils.clip_grad_norm_(self.agent.policy.parameters(), 40)
@@ -125,6 +135,8 @@ class PPO():
         log['value_loss'] = value_loss.item()
         log['policy_surr'] = policy_surr.item()
         log['policy_loss'] = policy_loss.item()
+        if 'weight_entropy' in info:
+            log['weight_entropy'] = weight_entropy.mean().item()
         return log
 
 

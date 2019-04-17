@@ -17,7 +17,7 @@ class GaussianPolicy(nn.Module):
         raise NotImplementedError
 
     def select_action(self, state, deterministic=False):
-        mu, std, kl = self.forward(state)
+        mu, std, kl, info = self.forward(state)
         if deterministic:
             return mu
         else:
@@ -26,12 +26,13 @@ class GaussianPolicy(nn.Module):
             return action
 
     def get_log_prob(self, state, action):
-        mu, std, kl = self.forward(state)
+        mu, std, kl, info = self.forward(state)
         bsize = mu.size(0)
         dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
         log_prob = dist.log_prob(action).view(bsize, 1)
         entropy = dist.entropy().view(bsize, 1)
-        return {'log_prob': log_prob, 'kl': kl, 'entropy': entropy}
+        info.update({'log_prob': log_prob, 'kl': kl, 'entropy': entropy})
+        return info
 
     def post_process(self, state, action):
         return action
@@ -67,7 +68,7 @@ class WeightNetwork(GaussianPolicy):
         h = torch.cat((z, goal_embedding), dim=1)
         weights = self.decoder(h)
         std = self.std*torch.ones(*weights.size()).to(self.get_device())
-        return weights, std, kl
+        return weights, std, kl, {}
 
 class PrimitivePolicy(GaussianPolicy):
     """
@@ -88,7 +89,7 @@ class PrimitivePolicy(GaussianPolicy):
         z, kl = self.bottleneck(x)
         h = F.relu(self.decoder(z))
         mu, logstd = self.parameter_producer(h)
-        return mu, torch.exp(logstd), kl
+        return mu, torch.exp(logstd), kl, {}
 
 class CompositePolicy(GaussianPolicy):
     def __init__(self, weight_network, primitives, obs_dim, device, freeze_primitives=False):
@@ -99,7 +100,6 @@ class CompositePolicy(GaussianPolicy):
         self.outdim = self.primitives[0].outdim
         self.name = 'composite'
         self.obs_dim = obs_dim
-        # self.device = device
         self.freeze_primitives = freeze_primitives
 
     def get_composite_mu(self, mus, weights_over_variance, inverse_variance):
@@ -110,9 +110,9 @@ class CompositePolicy(GaussianPolicy):
     def execute_primitives(self, obs, no_grad):
         if no_grad:
             with torch.no_grad():
-                mus, stds, kls = zip(*[p(obs) for p in self.primitives])  # list of length k of (bsize, adim)
+                mus, stds, kls, infos = zip(*[p(obs) for p in self.primitives])  # list of length k of (bsize, adim)
         else:
-            mus, stds, kls = zip(*[p(obs) for p in self.primitives])  # list of length k of (bsize, adim)
+            mus, stds, kls, infos = zip(*[p(obs) for p in self.primitives])  # list of length k of (bsize, adim)
         mus = torch.stack(mus, dim=1)  # (bsize, k, outdim)
         stds = torch.stack(stds, dim=1)  # (bsize, k, outdim)
         kls = torch.stack(kls, dim=1)  # (bsize)
@@ -133,12 +133,16 @@ class CompositePolicy(GaussianPolicy):
     def forward(self, state):
         obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
         bsize = state.size(0)
-        weights, weights_std, weights_bottleneck_kl = self.weight_network(state)
+        weights, weights_std, weights_bottleneck_kl, weight_info = self.weight_network(state)
+
+        weight_dist = MultivariateNormal(loc=weights, scale_tril=torch.diag_embed(weights_std))
+        weight_entropy = weight_dist.entropy().view(bsize, 1)
+
         weights, weights_kl = reparametrize(mu=weights, std=weights_std, device=self.get_device())
         weights = F.sigmoid(weights).view(bsize, self.k, 1)
         mus, stds, kls = self.execute_primitives(obs, no_grad=self.freeze_primitives)
         composite_mu, composite_std, kls = self.get_composite_parameters(mus, stds, kls, weights)
-        return composite_mu, composite_std, kls
+        return composite_mu, composite_std, kls, {'weight_entropy': weight_entropy}
 
 class CompositeTransferPolicy(CompositePolicy):
     def __init__(self, weight_network, primitives, obs_dim, device):
@@ -146,7 +150,7 @@ class CompositeTransferPolicy(CompositePolicy):
 
     def forward(self, state):
         weights, std, kl = self.weight_network(state)
-        return weights, std, kl
+        return weights, std, kl, {}
 
     def select_action(self, state, deterministic=False):
         return self.weight_network.select_action(state, deterministic)
