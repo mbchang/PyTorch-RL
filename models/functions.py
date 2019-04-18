@@ -93,31 +93,42 @@ class DeterministicBottleneck(nn.Module):
         else:
             return torch.device('cpu')
 
+class ConstantLogStd(nn.Module):
+    def __init__(self, zdim, std):
+        self.logstd = np.log(std)
+        self.zdim = zdim
+
+    def forward(self, x):
+        return self.logstd * torch.ones((x.size(0), self.zdim))
+
 class GaussianParams(nn.Module):
     """
         h --> z
     """
-    def __init__(self, hdim, zdim, custom_init=False, fixed_var=False):
+    def __init__(self, hdim, zdim, custom_init=False, fixed_std=None):
         super(GaussianParams, self).__init__()
         self.mu = nn.Linear(hdim, zdim)
+        self.fixed_std = fixed_std
 
-        if fixed_var:
-            # NOTE that this assumes that batch size is 1
-            nn.Parameter(torch.ones(1, zdim) * np.log(0.1))
-        else:
+        # if not self.fixed_std:
+        if self.fixed_std is None:
             self.logstd = nn.Linear(hdim, zdim)
+
+            if custom_init:
+                self.logstd.weight.data.mul_(0.1)  # Can take out
+                nn.init.constant_(self.logstd.bias, np.log(0.1))
 
         if custom_init:
             # nn.init.uniform_(self.mu.weight)
             self.mu.weight.data.mul_(0.1)
             nn.init.constant_(self.mu.bias, 0.0)
 
-            self.logstd.weight.data.mul_(0.1)  # Can take out
-            nn.init.constant_(self.logstd.bias, np.log(0.1))
-
     def forward(self, x):
         mu = self.mu(x)
-        logstd = self.logstd(x)
+        if self.fixed_std is not None:
+            logstd = np.log(self.fixed_std) * torch.ones((x.size(0), 2))
+        else:
+            logstd = self.logstd(x)
         return mu, logstd
 
 

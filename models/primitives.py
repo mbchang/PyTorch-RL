@@ -44,7 +44,7 @@ class GaussianPolicy(nn.Module):
             return torch.device('cpu')
 
 class WeightNetwork(GaussianPolicy):
-    def __init__(self, state_dim, goal_dim, encoder_dims, bottleneck_dim, decoder_dims, device, vib=False):
+    def __init__(self, state_dim, goal_dim, encoder_dims, bottleneck_dim, decoder_dims, device, vib=False, fixed_std=None):
         super(WeightNetwork, self).__init__(device)
         self.state_dim = state_dim
         self.goal_dim = goal_dim
@@ -57,8 +57,7 @@ class WeightNetwork(GaussianPolicy):
         self.bottleneck = bottleneck(encoder_dims[-1], bottleneck_dim, device=device)
         self.goal_trunk = Feedforward([goal_dim] + encoder_dims + [bottleneck_dim])
         self.decoder = Feedforward([bottleneck_dim*2, decoder_dims[0]])
-        fixed_var = False  # but this is True during transfer
-        self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_var=fixed_var)
+        self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_std=fixed_std)
 
     def forward(self, state):
         x, g = state[..., :self.state_dim], state[...,self.state_dim:]
@@ -71,14 +70,14 @@ class WeightNetwork(GaussianPolicy):
         return weights, std, kl, {}
 
 class PrimitivePolicy(GaussianPolicy):
-    def __init__(self, encoder, bottleneck_dim, decoder_dims, device, id, fixed_var=False, vib=False):
+    def __init__(self, encoder, bottleneck_dim, decoder_dims, device, id, fixed_std=None, vib=False):
         super(PrimitivePolicy, self).__init__(device)
         self.outdim = decoder_dims[-1]
         self.encoder = encoder
         bottleneck = InformationBottleneck if vib else DeterministicBottleneck
         self.bottleneck = bottleneck(encoder.dims[-1], bottleneck_dim, device=device)
         self.decoder = nn.Linear(bottleneck_dim, decoder_dims[0])
-        self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_var=fixed_var)
+        self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_std=fixed_std)
         self.name = 'primitive-{}'.format(id)
 
     def forward(self, x):

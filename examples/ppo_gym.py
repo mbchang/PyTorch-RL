@@ -92,8 +92,8 @@ parser.add_argument('--debug', action='store_true',
                     help='debug')
 parser.add_argument('--printf', action='store_true',
                     help='printf')
-parser.add_argument('--fixed-var', action='store_true',
-                    help='fixed variance')
+parser.add_argument('--fixed-std', type=float, default=0.2,
+                    help='fixed std')
 parser.add_argument('--vwght', type=str, default='1 0',
                     help='weight for xy: 1 0 is x vel forward, 0 -1 is y vel backward')
 parser.add_argument('--goal-dist', type=float, default=10,
@@ -352,7 +352,7 @@ def initialize_actor_critic(env, device):
                 goal_dim = env.env.goal_dim
                 if args.debug:
                     encoder = Feedforward([state_dim+goal_dim, 64, 64], out_act=F.relu)
-                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, id=0, fixed_var=args.fixed_var, vib=False)
+                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, id=0)
                 else:
                     encoder = Feedforward([state_dim+goal_dim, 128], out_act=F.relu)
                     policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device, id=0)
@@ -387,7 +387,7 @@ def reset_weightnet_critic(env, composite_policy, device):
     goal_dim = env.env.goal_dim
     num_primitives = args.nprims
     hdim = 64 if args.debug else 128
-    weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[hdim], bottleneck_dim=hdim, decoder_dims=[hdim, num_primitives], device=device)
+    weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[hdim], bottleneck_dim=hdim, decoder_dims=[hdim, num_primitives], device=device, fixed_std=args.fixed_std)
 
     # composite_policy.weight_network = weight_network
     # value_net = Value(state_dim+goal_dim)
