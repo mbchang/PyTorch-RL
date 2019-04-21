@@ -213,6 +213,14 @@ def initialize_actor_critic(env, device):
                 weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[hdim], bottleneck_dim=hdim, decoder_dims=[hdim, num_primitives], device=device)
                 policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e, i) for i, e in enumerate(encoders)]), obs_dim=state_dim, device=device) 
                 value_net = Value(state_dim+goal_dim)
+            elif args.policy == 'latent':
+                goal_dim = env.env.goal_dim
+                hdim = 64 if args.debug else 128
+                zdim = args.nprims
+                goal_embedder = GoalEmbedder(dims=[goal_dim, zdim])
+                policy_net = LatentPolicy(goal_embedder=goal_embedder, network_dims=[], outdim=action_dim, obs_dim=state_dim, device=device)
+                value_net = Value(state_dim+goal_dim)
+                pass
             else:
                 False
     ######################################################
@@ -242,6 +250,30 @@ def reset_weightnet_critic(env, composite_policy, device):
     value_net.to(device)
 
     return composite_policy, value_net
+
+def setup_experiment(args, policy_name):
+    args = process_args(args)
+    assert args.policy == 'composite'
+
+    """environment"""
+    env = initialize_environment(args)
+
+    """seeding"""
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    env.seed(args.seed)
+    return env
+
+def initialize_experiment(env, policy_net, value_net, device, args, running_state, ext=''):
+    agent = Agent(env, policy_net, value_net, device, args, running_state=running_state, num_threads=args.num_threads)
+    logger = create_logger(lambda params: build_expname(args=params, ext=ext), args)
+    initialize_logger(logger)
+    return agent, logger
+
+def run_experiment(agent, env, logger, device, dtype, args):
+    rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
+    exp = Experiment(agent, env, rl_alg, logger, None, args)
+    exp.main_loop()
 
 def main(args):
     args = process_args(args)
@@ -278,135 +310,58 @@ def visualize_params(dict_of_models, pfunc):
     pfunc('#'*80)
 
 def main_transfer_composite(args):
-    args = process_args(args)
-    assert args.policy == 'composite'
+    def vis_p(label, weight_net, value_net, primitive, logger):
+        logger.printf(label)
+        visualize_params({
+            'Weight Network': weight_net,
+            'Value Network': value_net,
+            'Primitive 0': primitive},
+            pfunc=lambda x: logger.printf(x))
 
-    """environment"""
-    env = initialize_environment(args)
-
-    """seeding"""
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    env.seed(args.seed)
-
-    # """define actor and critic"""
+    env = setup_experiment(args, 'composite')
     policy_net, value_net = initialize_actor_critic(env, device)
-
-    """create agent"""
     env.env.train_mode()
-    agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
-    logger = create_logger(build_expname, args)
-    initialize_logger(logger)
-
-    logger.printf('Initial')
-    visualize_params({
-        'Weight Network': policy_net.weight_network,
-        'Value Network': value_net,
-        'Primitive 0': policy_net.primitives[0]},
-        pfunc=lambda x: logger.printf(x))
-
-    rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
-    exp = Experiment(agent, env, rl_alg, logger, None, args)
-    exp.main_loop()
-
-    logger.printf('After Training')
-    visualize_params({
-        'Weight Network': policy_net.weight_network,
-        'Value Network': value_net,
-        'Primitive 0': policy_net.primitives[0]},
-        pfunc=lambda x: logger.printf(x))
+    agent, logger = initialize_experiment(env, policy_net, value_net, device, args, None)
+    vis_p('Initial', policy_net.weight_network, value_net, policy_net.primitives[0], logger)
+    run_experiment(agent, env, logger, device, dtype, args)
+    vis_p('After Training', policy_net.weight_network, value_net, policy_net.primitives[0], logger)
 
     ######################################################################
 
     # now reset the weight network and the value function.
     policy_net, value_net = reset_weightnet_critic(env, agent.policy, device)
-
     env.env.test_mode()
-    agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
-    logger = create_logger(lambda params: build_expname(args=params, ext='_transfer'), args)  # with transfer tag
-    initialize_logger(logger)  # should save in the same folder as before
-
-    logger.printf('After Reset')
-    visualize_params({
-        'Weight Network': policy_net.weight_network,
-        'Value Network': value_net,
-        'Primitive 0': policy_net.primitives[0]},
-        pfunc=lambda x: logger.printf(x))
-
-    rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
-    exp = Experiment(agent, env, rl_alg, logger, None, args)
-    exp.main_loop()
-
-    logger.printf('After Transfer')
-    visualize_params({
-        'Weight Network': policy_net.weight_network,
-        'Value Network': value_net,
-        'Primitive 0': policy_net.primitives[0]},
-        pfunc=lambda x: logger.printf(x))
+    agent, logger = initialize_experiment(env, policy_net, value_net, device, args, None, ext='_transfer')
+    vis_p('After Reset', policy_net.weight_network, value_net, policy_net.primitives[0], logger)
+    run_experiment(agent, env, logger, device, dtype, args)
+    vis_p('After Transfer', policy_net.weight_network, value_net, policy_net.primitives[0], logger)
 
 def main_transfer_primitive(args):
-    args = process_args(args)
-    assert args.policy == 'primitive'
+    def vis_p(label, policy_net, value_net, logger):
+        logger.printf(label)
+        visualize_params({
+            'Policy Network': policy_net,
+            'Value Network': value_net},
+            pfunc=lambda x: logger.printf(x))
 
-    """environment"""
-    env = initialize_environment(args)
-
-    """seeding"""
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    env.seed(args.seed)
-
-    # """define actor and critic"""
+    env = setup_experiment(args, 'primitive')
     policy_net, value_net = initialize_actor_critic(env, device)
-
-    """create agent"""
     env.env.train_mode()
-    agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
-    logger = create_logger(build_expname, args)
-    initialize_logger(logger)
-
-    logger.printf('Initial')
-    visualize_params({
-        'Policy Network': policy_net,
-        'Value Network': value_net},
-        pfunc=lambda x: logger.printf(x))
-
-    rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
-    exp = Experiment(agent, env, rl_alg, logger, None, args)
-    exp.main_loop()
-
-    logger.printf('After Training')
-    visualize_params({
-        'Policy Network': policy_net,
-        'Value Network': value_net},
-        pfunc=lambda x: logger.printf(x))
+    agent, logger = initialize_experiment(env, policy_net, value_net, device, args, None)
+    vis_p('Initial', policy_net, value_net, logger)
+    run_experiment(agent, env, logger, device, dtype, args)
+    vis_p('After Training', policy_net, value_net, logger)
 
     ######################################################################
 
     # now reset the weight network and the value function.
     policy_net.zero_grad()
     value_net.zero_grad()
-
     env.env.test_mode()
-    agent = Agent(env, policy_net, value_net, device, args, running_state=None, num_threads=args.num_threads)
-    logger = create_logger(lambda params: build_expname(args=params, ext='_transfer'), args)  # with transfer tag
-    initialize_logger(logger)  # should save in the same folder as before
-
-    logger.printf('Initial for Transfer')
-    visualize_params({
-        'Policy Network': policy_net,
-        'Value Network': value_net},
-        pfunc=lambda x: logger.printf(x))
-
-    rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
-    exp = Experiment(agent, env, rl_alg, logger, None, args)
-    exp.main_loop()
-
-    logger.printf('After Transfer')
-    visualize_params({
-        'Policy Network': policy_net,
-        'Value Network': value_net},
-        pfunc=lambda x: logger.printf(x))
+    agent, logger = initialize_experiment(env, policy_net, value_net, device, args, None, ext='_transfer')
+    vis_p('Initial for Transfer', policy_net, value_net, logger)
+    run_experiment(agent, env, logger, device, dtype, args)
+    vis_p('After Transfer', policy_net, value_net, logger)
 
 if __name__ == '__main__':
     if args.for_transfer:

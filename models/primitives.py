@@ -178,9 +178,9 @@ class CompositeTransferPolicy(CompositePolicy):
         composite_mu, composite_std, kls = self.get_composite_parameters(mus, stds, kls, weights)
         return composite_mu
 
-class LatentSpacePolicy(GaussianPolicy):
+class LatentPolicy(GaussianPolicy):
     def __init__(self, goal_embedder, network_dims, outdim, obs_dim, device):
-        super(LatentSpacePolicy, self).__init__(device)
+        super(LatentPolicy, self).__init__(device)
         self.goal_embedder = goal_embedder
         self.network_dims = network_dims
         self.outdim = outdim
@@ -200,7 +200,7 @@ class LatentSpacePolicy(GaussianPolicy):
 
 class LatentTransferPolicy(GaussianPolicy):
     def __init__(self, goal_embedder, network_dims, outdim, obs_dim, device):
-        super(LatentSpacePolicy, self).__init__(device)
+        super(LatentPolicy, self).__init__(device)
         self.goal_embedder = goal_embedder
         self.network_dims = network_dims
         self.outdim = outdim
