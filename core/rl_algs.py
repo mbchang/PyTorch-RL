@@ -137,6 +137,7 @@ class PPO():
         log['policy_loss'] = policy_loss.item()
         if 'weight_entropy' in info:
             log['weight_entropy'] = weight_entropy.mean().item()
+            log['weight_std'] = info['weight_std'].mean().item()
         return log
 
 

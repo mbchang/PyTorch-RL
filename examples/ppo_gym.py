@@ -303,6 +303,7 @@ def build_expname(args, ext=''):
     expname += '_ts-{}'.format(args.task_scale)
     expname += '_np-{}'.format(args.nprims)
     expname += '_tt-{}'.format(args.tasks)
+    expname += '_wef-{}'.format(args.weight_entropy_coeff)
 
     expname += ext
     if args.debug: expname+= '_debug'
@@ -326,7 +327,7 @@ def process_args(args):
         args.visualize_every = 5
         args.min_batch_size = 128
         args.num_threads = 1
-        args.num_test = 5
+        args.num_test = 2
         args.nprims = 2
         args.plr = 1e-2
         args.nsamp = 2

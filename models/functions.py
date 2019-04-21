@@ -105,8 +105,9 @@ class GaussianParams(nn.Module):
     """
         h --> z
     """
-    def __init__(self, hdim, zdim, custom_init=False, fixed_std=None):
+    def __init__(self, hdim, zdim, device, custom_init=False, fixed_std=None):
         super(GaussianParams, self).__init__()
+        self.device=device
         self.mu = nn.Linear(hdim, zdim)
         self.fixed_std = fixed_std
 
@@ -126,9 +127,14 @@ class GaussianParams(nn.Module):
     def forward(self, x):
         mu = self.mu(x)
         if self.fixed_std is not None:
-            logstd = np.log(self.fixed_std) * torch.ones((x.size(0), 2))
+            logstd = np.log(self.fixed_std) * torch.ones((x.size(0), 2)).to(self.get_device())
         else:
             logstd = self.logstd(x)
         return mu, logstd
 
+    def get_device(self):
+        if next(self.parameters()).is_cuda:
+            return self.device
+        else:
+            return torch.device('cpu')
 

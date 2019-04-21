@@ -57,7 +57,7 @@ class WeightNetwork(GaussianPolicy):
         self.bottleneck = bottleneck(encoder_dims[-1], bottleneck_dim, device=device)
         self.goal_trunk = Feedforward([goal_dim] + encoder_dims + [bottleneck_dim])
         self.decoder = Feedforward([bottleneck_dim*2, decoder_dims[0]])
-        self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_std=fixed_std)
+        self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], device=device, custom_init=True, fixed_std=fixed_std)
 
     def forward(self, state):
         x, g = state[..., :self.state_dim], state[...,self.state_dim:]
@@ -77,7 +77,7 @@ class PrimitivePolicy(GaussianPolicy):
         bottleneck = InformationBottleneck if vib else DeterministicBottleneck
         self.bottleneck = bottleneck(encoder.dims[-1], bottleneck_dim, device=device)
         self.decoder = nn.Linear(bottleneck_dim, decoder_dims[0])
-        self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], custom_init=True, fixed_std=fixed_std)
+        self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], device=device, custom_init=True, fixed_std=fixed_std)
         self.name = 'primitive-{}'.format(id)
 
     def forward(self, x):
@@ -138,7 +138,7 @@ class CompositePolicy(GaussianPolicy):
         weights = F.sigmoid(weights).view(bsize, self.k, 1)
         mus, stds, kls = self.execute_primitives(obs, no_grad=self.freeze_primitives)
         composite_mu, composite_std, kls = self.get_composite_parameters(mus, stds, kls, weights)
-        return composite_mu, composite_std, kls, {'weight_entropy': weight_entropy}
+        return composite_mu, composite_std, kls, {'weight_entropy': weight_entropy, 'weight_std': weights_std}
 
 class CompositeTransferPolicy(CompositePolicy):
     def __init__(self, weight_network, primitives, obs_dim, device):
@@ -168,7 +168,7 @@ class LatentSpacePolicy(GaussianPolicy):
         self.goal_embedder = goal_embedder
         self.network_dims = network_dims
         self.outdim = outdim
-        self.parameter_producer = GaussianParams(network_dims[-1], outdim, custom_init=True)
+        self.parameter_producer = GaussianParams(network_dims[-1], outdim, device=device, custom_init=True)
         self.obs_dim = obs_dim
         self.name = 'latent'
 
@@ -188,7 +188,7 @@ class LatentTransferPolicy(GaussianPolicy):
         self.goal_embedder = goal_embedder
         self.network_dims = network_dims
         self.outdim = outdim
-        self.parameter_producer = GaussianParams(network_dims[-1], outdim, custom_init=True)
+        self.parameter_producer = GaussianParams(network_dims[-1], outdim, device=device, custom_init=True)
         self.obs_dim = obs_dim
         self.name = 'latent'
 
@@ -208,7 +208,7 @@ class GoalEmbedder(GaussianPolicy):
         self.dims = dims
         self.network = Feedforward(dims=dims[:-2], out_act=F.relu)
         self.bottleneck = DeterministicBottleneck(self.dims[-3], self.dims[-2])
-        self.parameter_producer = GaussianParams(self.dims[-2], self.self.dims[-1])
+        self.parameter_producer = GaussianParams(self.dims[-2], self.self.dims[-1], device=device)
 
     def forward(self, state):
         obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
