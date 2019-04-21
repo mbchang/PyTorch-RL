@@ -52,7 +52,7 @@ def reparametrize(mu, std, device):
     dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
     z = dist.rsample()
     kl = kl_standard_normal(dist, device).view(bsize, 1)
-    return z, kl
+    return z, kl, dist
 
 class InformationBottleneck(nn.Module):
     def __init__(self, hdim, zdim, device):

@@ -70,20 +70,20 @@ class WeightNetwork(GaussianPolicy):
         return weights, std, kl, {}
 
 class GoalEmbedder(GaussianPolicy):
-    def __init__(self, dims, vib=False):
+    def __init__(self, dims, ignore_obs=True):
         assert len(dims) >= 3
         self.dims = dims
+        self.ignore_obs = ignore_obs
         self.network = Feedforward(dims=dims[:-2], out_act=F.relu)
-        bottleneck = InformationBottleneck if vib else DeterministicBottleneck
-        self.bottleneck = bottleneck(self.dims[-3], self.dims[-2])
+        self.bottleneck = DeterministicBottleneck(self.dims[-3], self.dims[-2])
         self.parameter_producer = GaussianParams(self.dims[-2], self.self.dims[-1], device=device)
 
     def forward(self, state):
         obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
-        h = self.network(obs) # ignore the goal
+        h = self.network(goal) if self.ignore_obs else self.network(state)
         z, kl = self.bottleneck(h)  # dummy kl
         mu, logstd = self.parameter_producer(z)
-        return mu, torch.exp(logstd), kl
+        return mu, torch.exp(logstd), kl, {}
 
 class PrimitivePolicy(GaussianPolicy):
     def __init__(self, encoder, bottleneck_dim, decoder_dims, device, id, fixed_std=None, vib=False):
@@ -146,11 +146,8 @@ class CompositePolicy(GaussianPolicy):
         obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
         bsize = state.size(0)
         weights, weights_std, weights_bottleneck_kl, weight_info = self.weight_network(state)
-
-        weight_dist = MultivariateNormal(loc=weights, scale_tril=torch.diag_embed(weights_std))
+        weights, weights_kl, weight_dist = reparametrize(mu=weights, std=weights_std, device=self.get_device())
         weight_entropy = weight_dist.entropy().view(bsize, 1)
-
-        weights, weights_kl = reparametrize(mu=weights, std=weights_std, device=self.get_device())
         weights = F.sigmoid(weights).view(bsize, self.k, 1)
         mus, stds, kls = self.execute_primitives(obs, no_grad=self.freeze_primitives)
         composite_mu, composite_std, kls = self.get_composite_parameters(mus, stds, kls, weights)
@@ -184,40 +181,48 @@ class LatentPolicy(GaussianPolicy):
         self.goal_embedder = goal_embedder
         self.network_dims = network_dims
         self.outdim = outdim
+        self.network = Feedforward(dims=dims[:-1], out_act=F.relu)
         self.parameter_producer = GaussianParams(network_dims[-1], outdim, device=device, custom_init=True)
+        self.decoder = nn.Sequential(self.network, self.parameter_producer)
         self.obs_dim = obs_dim
         self.name = 'latent'
 
     def forward(self, state):
         obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
         bsize = state.size(0)
-        goal_mu, goal_std, goal_bottleneck_kl = self.goal_embedder(goal)
-        goal_embedding, goal_embedding_kl = reparametrize(mu=goal_mu, std=goal_std, device=self.get_device())
+        goal_mu, goal_std, goal_bottleneck_kl = self.goal_embedder(state)
+        goal_embedding, goal_embedding_kl, goal_embedding_dist = reparametrize(mu=goal_mu, std=goal_std, device=self.get_device())
+        goal_embedding = F.sigmoid(goal_embedding)
         inp = torch.cat((obs, goal_embedding), dim=-1)
-        h = F.relu(self.network(inp))
-        mu, logstd = self.parameter_producer(h)
+        mu, logstd = self.decoder(inp)
         return mu, torch.exp(logstd), goal_embedding_kl
 
 class LatentTransferPolicy(GaussianPolicy):
-    def __init__(self, goal_embedder, network_dims, outdim, obs_dim, device):
+    def __init__(self, goal_embedder, decoder, obs_dim, device):
         super(LatentPolicy, self).__init__(device)
         self.goal_embedder = goal_embedder
-        self.network_dims = network_dims
-        self.outdim = outdim
-        self.parameter_producer = GaussianParams(network_dims[-1], outdim, device=device, custom_init=True)
+        self.decoder = decoder
         self.obs_dim = obs_dim
         self.name = 'latent'
 
     def forward(self, state):
+        goal_mu, goal_std, goal_bottleneck_kl = self.goal_embedder(state)
+        return goal_mu, goal_std, goal_bottleneck_kl, {}
+
+    def select_action(self, state, deterministic=False):
+        return self.goal_embedder.select_action(state, deterministic)
+
+    def get_log_prob(self, state, action):
+        return self.goal_embedder.get_log_prob(state, action)
+
+    def post_process(self, state, goal_embedding):
         obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
         bsize = state.size(0)
-        goal_mu, goal_std, goal_bottleneck_kl = self.goal_embedder(goal)
-        goal_embedding, goal_embedding_kl = reparametrize(mu=goal_mu, std=goal_std, device=self.get_device())
+        goal_embedding = F.sigmoid(goal_embedding)
         inp = torch.cat((obs, goal_embedding), dim=-1)
-        h = F.relu(self.network(inp))
-        mu, logstd = self.parameter_producer(h)
-        return mu, torch.exp(logstd), goal_embedding_kl
-
+        with torch.no_grad():
+            mu, logstd = self.decoder(inp)
+        return mu
 
 def debug2():
     state_dim = 60

@@ -191,18 +191,14 @@ def initialize_actor_critic(env, device):
             policy_net = DiscretePolicy(state_dim, action_dim)
             value_net = Value(state_dim)
         else:
-
             if args.policy == 'vanilla':
                 policy_net = Policy(state_dim, action_dim, log_std=args.log_std)
                 value_net = Value(state_dim)
             elif args.policy == 'primitive':
                 goal_dim = env.env.goal_dim
-                if args.debug:
-                    encoder = Feedforward([state_dim+goal_dim, 64, 64], out_act=F.relu)
-                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=64, decoder_dims=[64, action_dim], device=device, id=0)
-                else:
-                    encoder = Feedforward([state_dim+goal_dim, 128], out_act=F.relu)
-                    policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=128, decoder_dims=[128, action_dim], device=device, id=0)
+                hdim = 64 if args.debug else 128
+                encoder = Feedforward([state_dim+goal_dim, hdim], out_act=F.relu)
+                policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=hdim, decoder_dims=[hdim, action_dim], device=device, id=0)
                 value_net = Value(state_dim+goal_dim)
             elif args.policy == 'composite':
                 num_primitives = args.nprims
@@ -214,17 +210,19 @@ def initialize_actor_critic(env, device):
                 policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e, i) for i, e in enumerate(encoders)]), obs_dim=state_dim, device=device) 
                 value_net = Value(state_dim+goal_dim)
             elif args.policy == 'latent':
+                args.klp = 0.0001
                 goal_dim = env.env.goal_dim
                 hdim = 64 if args.debug else 128
                 zdim = args.nprims
-                goal_embedder = GoalEmbedder(dims=[goal_dim, zdim])
-                policy_net = LatentPolicy(goal_embedder=goal_embedder, network_dims=[], outdim=action_dim, obs_dim=state_dim, device=device)
+                obs_dim = state_dim-goal_dim
+                goal_embedder = GoalEmbedder(dims=[goal_dim, hdim, hdim, zdim]) # good
+                policy_net = LatentPolicy(goal_embedder=goal_embedder, network_dims=[obs_dim+zdim, hdim, hdim], outdim=action_dim, obs_dim=state_dim, device=device)
                 value_net = Value(state_dim+goal_dim)
-                pass
             else:
                 False
     ######################################################
     # TODO verify that this works
+    # TODO: make this separate
     if args.resume:
         policy_net, value_net, running_state = pickle.load(open(args.model_path, "rb"))
         # TODO: load from checkpoint
@@ -319,6 +317,16 @@ def main_transfer_composite(args):
             'Weight Network': policy_net.weight_network,
             'Value Network': value_net,
             'Primitive 0': policy_net.primitives[0]},
+            pfunc=lambda x: logger.printf(x))
+    pretrain_transfer(args, device, vis_p)
+
+def main_transfer_latent(args):
+    def vis_p(label, policy_net, value_net, logger):
+        logger.printf(label)
+        visualize_params({
+            'Decoder Network': policy_net.decoder,
+            'Encoder Network': policy_net.encoder,
+            'Value Network': value_net},
             pfunc=lambda x: logger.printf(x))
     pretrain_transfer(args, device, vis_p)
 
