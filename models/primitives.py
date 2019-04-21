@@ -69,6 +69,22 @@ class WeightNetwork(GaussianPolicy):
         std = torch.exp(logstd)  # this should around 0.2 or 0.3
         return weights, std, kl, {}
 
+class GoalEmbedder(GaussianPolicy):
+    def __init__(self, dims, vib=False):
+        assert len(dims) >= 3
+        self.dims = dims
+        self.network = Feedforward(dims=dims[:-2], out_act=F.relu)
+        bottleneck = InformationBottleneck if vib else DeterministicBottleneck
+        self.bottleneck = bottleneck(self.dims[-3], self.dims[-2])
+        self.parameter_producer = GaussianParams(self.dims[-2], self.self.dims[-1], device=device)
+
+    def forward(self, state):
+        obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        h = self.network(obs) # ignore the goal
+        z, kl = self.bottleneck(h)  # dummy kl
+        mu, logstd = self.parameter_producer(z)
+        return mu, torch.exp(logstd), kl
+
 class PrimitivePolicy(GaussianPolicy):
     def __init__(self, encoder, bottleneck_dim, decoder_dims, device, id, fixed_std=None, vib=False):
         super(PrimitivePolicy, self).__init__(device)
@@ -201,21 +217,6 @@ class LatentTransferPolicy(GaussianPolicy):
         h = F.relu(self.network(inp))
         mu, logstd = self.parameter_producer(h)
         return mu, torch.exp(logstd), goal_embedding_kl
-
-class GoalEmbedder(GaussianPolicy):
-    def __init__(self, dims):
-        assert len(dims) >= 3
-        self.dims = dims
-        self.network = Feedforward(dims=dims[:-2], out_act=F.relu)
-        self.bottleneck = DeterministicBottleneck(self.dims[-3], self.dims[-2])
-        self.parameter_producer = GaussianParams(self.dims[-2], self.self.dims[-1], device=device)
-
-    def forward(self, state):
-        obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
-        h = self.network(obs) # ignore the goal
-        z, kl = self.bottleneck(h)  # dummy kl
-        mu, logstd = self.parameter_producer(z)
-        return mu, torch.exp(logstd), kl
 
 
 def debug2():
