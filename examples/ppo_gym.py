@@ -145,43 +145,6 @@ class Experiment():
         self.running_state = running_state
         self.args = args
 
-    def sample_single_trajectory(self, render):
-        raise NotImplementedError
-        episode_data = []
-        state = self.env.reset()
-        reward_episode = 0
-        for t in range(self.args.maxeplen):  # Don't infinite loop while learning
-            state_var = tensor(state).unsqueeze(0)
-            with torch.no_grad():
-                action = self.agent.policy.select_action(state_var)[0].numpy()
-            action = int(action) if self.agent.policy.is_disc_action else action.astype(np.float64)
-            next_state, reward, done, info = self.env.step(action)
-            reward_episode += reward
-            mask = 0 if done else 1
-            e = copy.deepcopy(info)
-            e.update({'reward_total': reward})
-            if render:
-                frame = self.env.render(mode='rgb_array')
-                e['frame'] = frame
-            episode_data.append(e)
-            if done:
-                break
-            state = next_state
-        return episode_data
-
-    def sample_trajectory(self, render):
-        raise NotImplementedError
-        with torch.no_grad():
-            best_reward_episode = -np.inf
-            best_episode_data = {}
-            for i in range(self.args.num_test):
-                episode_data = self.sample_single_trajectory(render)
-                reward_episode = np.sum([e['reward_total'] for e in episode_data])
-                if reward_episode > best_reward_episode:
-                    best_reward_episode = reward_episode
-                    best_episode_data = copy.deepcopy(episode_data)
-        return best_episode_data
-
     def visualize(self, policy_name, i_episode, episode_data, mode, sample_num):
         frames = np.array([e['frame'] for e in episode_data])
         if self.env.env.multitask:
