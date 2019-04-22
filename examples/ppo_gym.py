@@ -18,7 +18,7 @@ from infra.env_config import *
 from models.mlp_policy import Policy
 from models.mlp_critic import Value
 from models.mlp_policy_disc import DiscretePolicy
-from models.primitives import Feedforward, CompositePolicy, WeightNetwork, PrimitivePolicy, CompositeTransferPolicy
+from models.primitives import Feedforward, CompositePolicy, WeightNetwork, PrimitivePolicy, CompositeTransferPolicy, GoalEmbedder, LatentPolicy, LatentTransferPolicy
 from utils import *
 
 parser = argparse.ArgumentParser(description='PyTorch PPO example')
@@ -150,6 +150,7 @@ def build_expname(args, ext=''):
     expname += '_np-{}'.format(args.nprims)
     expname += '_tt-{}'.format(args.tasks)
     expname += '_wef-{}'.format(args.weight_entropy_coeff)
+    expname += '_klp-{}'.format(args.klp)
 
     expname += ext
     if args.debug: expname+= '_debug'
@@ -210,13 +211,11 @@ def initialize_actor_critic(env, device):
                 policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e, i) for i, e in enumerate(encoders)]), obs_dim=state_dim, device=device) 
                 value_net = Value(state_dim+goal_dim)
             elif args.policy == 'latent':
-                args.klp = 0.0001
                 goal_dim = env.env.goal_dim
                 hdim = 64 if args.debug else 128
                 zdim = args.nprims
-                obs_dim = state_dim-goal_dim
-                goal_embedder = GoalEmbedder(dims=[goal_dim, hdim, hdim, zdim]) # good
-                policy_net = LatentPolicy(goal_embedder=goal_embedder, network_dims=[obs_dim+zdim, hdim, hdim], outdim=action_dim, obs_dim=state_dim, device=device)
+                goal_embedder = GoalEmbedder(dims=[goal_dim, hdim, hdim, zdim], obs_dim=state_dim, device=device) # good
+                policy_net = LatentPolicy(goal_embedder=goal_embedder, network_dims=[state_dim+zdim, hdim, hdim], outdim=action_dim, obs_dim=state_dim, device=device)
                 value_net = Value(state_dim+goal_dim)
             else:
                 False
@@ -249,6 +248,16 @@ def reset_for_transfer(env, policy_net, value_net, device, args):
     elif args.policy == 'primitive':
         policy_net.zero_grad()
         value_net.zero_grad()
+    elif args.policy == 'latent':
+        state_dim = env.observation_space.shape[0]
+        goal_dim = env.env.goal_dim
+        hdim = 64 if args.debug else 128
+        zdim = args.nprims
+        goal_embedder = GoalEmbedder(dims=[state_dim+goal_dim, hdim, hdim, zdim], obs_dim=state_dim, device=device, fixed_std=args.fixed_std, ignore_obs=False)
+        policy_net = LatentTransferPolicy(goal_embedder=goal_embedder, decoder=policy_net.decoder, obs_dim=state_dim, device=device)
+        value_net = Value(state_dim+goal_dim)
+        policy_net.to(device)
+        value_net.to(device)
     else:
         assert False
     return policy_net, value_net
@@ -325,7 +334,7 @@ def main_transfer_latent(args):
         logger.printf(label)
         visualize_params({
             'Decoder Network': policy_net.decoder,
-            'Encoder Network': policy_net.encoder,
+            'Encoder Network': policy_net.goal_embedder,
             'Value Network': value_net},
             pfunc=lambda x: logger.printf(x))
     pretrain_transfer(args, device, vis_p)
@@ -343,8 +352,12 @@ if __name__ == '__main__':
     if args.for_transfer:
         if args.policy == 'primitive':
             main_transfer_primitive(args)
-        else:
+        elif args.policy == 'composite':
             main_transfer_composite(args)
+        elif args.policy == 'latent':
+            main_transfer_latent(args)
+        else:
+            assert False
     else:
         main(args)
 

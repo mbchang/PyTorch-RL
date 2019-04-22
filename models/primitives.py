@@ -70,13 +70,15 @@ class WeightNetwork(GaussianPolicy):
         return weights, std, kl, {}
 
 class GoalEmbedder(GaussianPolicy):
-    def __init__(self, dims, ignore_obs=True):
+    def __init__(self, dims, obs_dim, device, fixed_std=None, ignore_obs=True):
+        super(GoalEmbedder, self).__init__(device)
         assert len(dims) >= 3
         self.dims = dims
+        self.obs_dim = obs_dim
         self.ignore_obs = ignore_obs
         self.network = Feedforward(dims=dims[:-2], out_act=F.relu)
-        self.bottleneck = DeterministicBottleneck(self.dims[-3], self.dims[-2])
-        self.parameter_producer = GaussianParams(self.dims[-2], self.self.dims[-1], device=device)
+        self.bottleneck = DeterministicBottleneck(self.dims[-3], self.dims[-2], device=device)
+        self.parameter_producer = GaussianParams(self.dims[-2], self.dims[-1], device=device, custom_init=True, fixed_std=fixed_std)
 
     def forward(self, state):
         obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
@@ -181,7 +183,7 @@ class LatentPolicy(GaussianPolicy):
         self.goal_embedder = goal_embedder
         self.network_dims = network_dims
         self.outdim = outdim
-        self.network = Feedforward(dims=dims[:-1], out_act=F.relu)
+        self.network = Feedforward(dims=network_dims[:-1], out_act=F.relu)
         self.parameter_producer = GaussianParams(network_dims[-1], outdim, device=device, custom_init=True)
         self.decoder = nn.Sequential(self.network, self.parameter_producer)
         self.obs_dim = obs_dim
@@ -190,16 +192,16 @@ class LatentPolicy(GaussianPolicy):
     def forward(self, state):
         obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
         bsize = state.size(0)
-        goal_mu, goal_std, goal_bottleneck_kl = self.goal_embedder(state)
+        goal_mu, goal_std, goal_bottleneck_kl, goal_info = self.goal_embedder(state)
         goal_embedding, goal_embedding_kl, goal_embedding_dist = reparametrize(mu=goal_mu, std=goal_std, device=self.get_device())
         goal_embedding = F.sigmoid(goal_embedding)
         inp = torch.cat((obs, goal_embedding), dim=-1)
         mu, logstd = self.decoder(inp)
-        return mu, torch.exp(logstd), goal_embedding_kl
+        return mu, torch.exp(logstd), goal_embedding_kl, {'goal_std': goal_std}
 
 class LatentTransferPolicy(GaussianPolicy):
     def __init__(self, goal_embedder, decoder, obs_dim, device):
-        super(LatentPolicy, self).__init__(device)
+        super(LatentTransferPolicy, self).__init__(device)
         self.goal_embedder = goal_embedder
         self.decoder = decoder
         self.obs_dim = obs_dim
