@@ -57,7 +57,7 @@ class Experiment():
         with torch.no_grad():
             test_batch, test_log = self.agent.collect_samples(
                 policy=policy,
-                min_batch_size=self.args.min_batch_size, 
+                min_batch_size=10, 
                 deterministic=True, 
                 render=True,
                 hide_goal=hide_goal)

@@ -724,46 +724,91 @@ Running it again, but this time add a constant to the reward.
 #         i = 0
 
 
-"""
-# # 4/21/19
+# """
+# # # 4/21/19
 
-# Latent Policy Transfer
+# # Latent Policy Transfer
+
+# """
+# optimizer = ['adam']
+# plr = [1e-5]
+# clr = [1e-4]
+# envs = ['Ant-v3']
+# policy = ['latent']
+# eplen = [200]
+# numtest = [100]
+# vweights = ['0 0']
+# nprims = [2, 4]
+# tasks = ['123_4']
+# nsamp = 2
+# klps = [0.0002, 0.0001]
+
+# outputdir = 'runs/ant_test_multitask_vel_latenttransfer_cont'
+
+# gpu = True
+# num_gpus = 2
+# i = 1
+
+# if gpu:
+#     os.system('export OMP_NUM_THREADS=1')
+
+# for o, p, c, e, l, n, vw, pi, np, t, klp in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy, nprims, tasks, klps):
+#     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+#     command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {} --nprims {} --tasks {} --nsamp {} --klp {}'.format(o, p, c, e, l, n, vw, pi, np, t, nsamp, klp)
+#     command += ' --for-transfer'
+#     command += ' --multitask'
+#     command += ' --outputdir {}'.format(outputdir)
+#     command += ' --printf'
+#     command += ' &'
+#     print(prefix + command)
+#     os.system(prefix + command)
+#     # i += 1
+#     # if i >= num_gpus:
+#     #     i = 0
+
+
+
+"""
+# # 4/18/19
+
+# CompositeTransferPolicy with sampled weights and entropy loss
+# 5e-4
 
 """
 optimizer = ['adam']
 plr = [1e-5]
 clr = [1e-4]
 envs = ['Ant-v3']
-policy = ['latent']
+policy = ['composite']
 eplen = [200]
 numtest = [100]
 vweights = ['0 0']
-nprims = [2, 4]
+nprims = [2]
 tasks = ['123_4']
 nsamp = 2
-klps = [0.0002, 0.0001]
+wef = [5e-4, 1e-3]
+# action_penalty = [1e-3, 1e-4]
 
-outputdir = 'runs/ant_test_multitask_vel_latenttransfer_cont'
+outputdir = 'runs/ant_test_multitask_vel_comptransfer_cont_we3'
 
 gpu = True
 num_gpus = 2
-i = 1
+i = 0
 
 if gpu:
     os.system('export OMP_NUM_THREADS=1')
 
-for o, p, c, e, l, n, vw, pi, np, t, klp in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy, nprims, tasks, klps):
+for o, p, c, e, l, n, vw, pi, np, t, we in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy, nprims, tasks, wef):
     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
-    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {} --nprims {} --tasks {} --nsamp {} --klp {}'.format(o, p, c, e, l, n, vw, pi, np, t, nsamp, klp)
+    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {} --nprims {} --tasks {} --nsamp {} --weight-entropy-coeff {}'.format(o, p, c, e, l, n, vw, pi, np, t, nsamp, we)
     command += ' --for-transfer'
     command += ' --multitask'
     command += ' --outputdir {}'.format(outputdir)
     command += ' --printf'
     command += ' &'
     print(prefix + command)
-    os.system(prefix + command)
+    # os.system(prefix + command)
     # i += 1
     # if i >= num_gpus:
     #     i = 0
-
 

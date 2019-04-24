@@ -3,17 +3,17 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
-from rlkit.envs.wrappers import NormalizedBoxEnv
-from rlkit.torch.tdm.envs.ant_env import GoalXYPosAnt
-from rlkit.torch.tdm.envs.multitask_env import MultitaskToFlatEnv
+# from rlkit.envs.wrappers import NormalizedBoxEnv
+# from rlkit.torch.tdm.envs.ant_env import GoalXYPosAnt
+# from rlkit.torch.tdm.envs.multitask_env import MultitaskToFlatEnv
 
 def make_renderer_track_agent(env, args):
-    if type(env) == NormalizedBoxEnv:
+    if type(env) == gym.wrappers.time_limit.TimeLimit:
+        viewer = env.env._get_viewer('rgb_array')
+    elif type(env) == NormalizedBoxEnv:
         viewer = env.wrapped_env._get_viewer('rgb_array')
     elif type(env) == MultitaskToFlatEnv:
         viewer = env.wrapped_env.wrapped_env._get_viewer('rgb_array')
-    elif type(env) == gym.wrappers.time_limit.TimeLimit:
-        viewer = env.env._get_viewer('rgb_array')
     else:
         assert False
     viewer.cam.type = 1
