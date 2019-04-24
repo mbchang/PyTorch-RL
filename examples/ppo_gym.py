@@ -22,7 +22,7 @@ from models.primitives import Feedforward, CompositePolicy, WeightNetwork, Primi
 from utils import *
 
 parser = argparse.ArgumentParser(description='PyTorch PPO example')
-parser.add_argument('--env-name', default="Hopper-v2", metavar='G',
+parser.add_argument('--env-name', default="Ant-v3", metavar='G',
                     help='name of the environment to run')
 parser.add_argument('--env-type', default="vel",
                     help='vel | goal; n-: normalized; m-: multitask')
@@ -71,7 +71,7 @@ parser.add_argument('--entropy-coeff', type=float, default=0.005,
 parser.add_argument('--weight-entropy-coeff', type=float, default=0.001,
                     help='KL for info bottlneeck for weight')
 
-parser.add_argument('--maxeplen', type=int, default=10000, metavar='N',
+parser.add_argument('--maxeplen', type=int, default=200, metavar='N',
                     help='maximal number of main iterations (default: 10000)')
 parser.add_argument('--num-test', type=int, default=100,
                     help='number of test trajectories (default: 100)')
@@ -81,7 +81,7 @@ parser.add_argument('--outputdir', type=str, default='runs',
                     help='outputdir')
 parser.add_argument('--policy', type=str, default='vanilla',
                     help='vanilla | primitive | mixture')
-parser.add_argument('--opt', type=str, default='sgd',
+parser.add_argument('--opt', type=str, default='adam',
                     help='adam | sgd')
 parser.add_argument('--debug', action='store_true',
                     help='debug')
@@ -89,7 +89,7 @@ parser.add_argument('--printf', action='store_true',
                     help='printf')
 parser.add_argument('--fixed-std', type=float, default=0.2,
                     help='fixed std')
-parser.add_argument('--vwght', type=str, default='1 0',
+parser.add_argument('--vwght', type=str, default='0 0',
                     help='weight for xy: 1 0 is x vel forward, 0 -1 is y vel backward')
 parser.add_argument('--goal-dist', type=float, default=10,
                     help='goal distance (default: 10)')
@@ -107,19 +107,19 @@ parser.add_argument('--task-scale', type=float, default=1,
 
 parser.add_argument('--running-state', action='store_true',
                     help='running state')
-parser.add_argument('--multitask', action='store_true',
+parser.add_argument('--multitask', action='store_true', default=True,
                     help='multitask')
 parser.add_argument('--multitask-for-transfer', action='store_true',
                     help='multitask for transfer')
 
 parser.add_argument('--nprims', type=int, default=1, metavar='N',
                     help='number of primitives (default: 1)')
-parser.add_argument('--for-transfer', action='store_true',
+parser.add_argument('--for-transfer', action='store_true', default=True,
                     help='multitask for transfer')
 
 parser.add_argument('--tasks', type=str, default='1234_1234',
                     help='quadrants for training_testing (default: 1234_1234)')
-parser.add_argument('--nsamp', type=int, default=1, metavar='N',
+parser.add_argument('--nsamp', type=int, default=2, metavar='N',
                     help='number of times we sample from test (default: 1)')
 
 args = parser.parse_args()
@@ -133,25 +133,11 @@ if torch.cuda.is_available():
 
 def build_expname(args, ext=''):
     expname = 'env-{}'.format(args.env_name)
-    expname += '_opt-{}'.format(args.opt)
-    expname += '_plr-{}'.format(args.plr)
-    expname += '_clr-{}'.format(args.clr)
-    expname += '_eplen-{}'.format(args.maxeplen)
-    expname += '_ntest-{}'.format(args.num_test)
     expname += '_p-{}'.format(args.policy)
-
-    expname += '_gd-{}'.format(args.goal_dist)
-    expname += '_vw-{}'.format(args.vwght.replace(' ', ''))
-    expname += '_ctlw-{}'.format(args.control_weight)
-    expname += '_cntw-{}'.format(args.contact_weight)
-    expname += '_tw-{}'.format(args.task_weight)
-    expname += '_hw-{}'.format(args.healthy_weight)
-    expname += '_ts-{}'.format(args.task_scale)
     expname += '_np-{}'.format(args.nprims)
     expname += '_tt-{}'.format(args.tasks)
     expname += '_wef-{}'.format(args.weight_entropy_coeff)
     expname += '_klp-{}'.format(args.klp)
-
     expname += ext
     if args.debug: expname+= '_debug'
     return expname

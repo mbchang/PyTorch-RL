@@ -775,34 +775,68 @@ Running it again, but this time add a constant to the reward.
 # 5e-4
 
 """
-optimizer = ['adam']
-plr = [1e-5]
-clr = [1e-4]
-envs = ['Ant-v3']
-policy = ['composite']
-eplen = [200]
-numtest = [100]
-vweights = ['0 0']
+# optimizer = ['adam']
+# plr = [1e-5]
+# clr = [1e-4]
+# envs = ['Ant-v3']
+# policy = ['composite']
+# eplen = [200]
+# numtest = [100]
+# vweights = ['0 0']
+# nprims = [2]
+# tasks = ['123_4']
+# nsamp = 2
+# wef = [1e-3]
+# # action_penalty = [1e-3, 1e-4]
+
+# outputdir = 'runs/ant_test_multitask_vel_comptransfer_cont_we3'
+
+# gpu = True
+# num_gpus = 2
+# i = 0
+
+# if gpu:
+#     os.system('export OMP_NUM_THREADS=1')
+
+# for o, p, c, e, l, n, vw, pi, np, t, we in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy, nprims, tasks, wef):
+#     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+#     command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {} --nprims {} --tasks {} --nsamp {} --weight-entropy-coeff {}'.format(o, p, c, e, l, n, vw, pi, np, t, nsamp, we)
+#     command += ' --for-transfer'
+#     command += ' --multitask'
+#     command += ' --outputdir {}'.format(outputdir)
+#     command += ' --printf'
+#     command += ' &'
+#     print(prefix + command)
+#     # os.system(prefix + command)
+#     # i += 1
+#     # if i >= num_gpus:
+#     #     i = 0
+
+
+
+# """
+# # # 4/23/19
+
+# # Simplify args; same functionality as before.
+
+# """
+policy = ['composite', 'latent', 'primitive']
 nprims = [2]
 tasks = ['123_4']
-nsamp = 2
-wef = [5e-4, 1e-3]
-# action_penalty = [1e-3, 1e-4]
-
-outputdir = 'runs/ant_test_multitask_vel_comptransfer_cont_we3'
+wef = [1e-3]
+seeds = [0, 1, 2]
+outputdir = 'runs/ant_workshop'
 
 gpu = True
-num_gpus = 2
+num_gpus = 1
 i = 0
 
 if gpu:
     os.system('export OMP_NUM_THREADS=1')
 
-for o, p, c, e, l, n, vw, pi, np, t, we in itertools.product(optimizer, plr, clr, envs, eplen, numtest, vweights, policy, nprims, tasks, wef):
+for pi, np, t, we in itertools.product(policy, nprims, tasks, wef):
     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
-    command = 'python examples/ppo_gym.py --opt {} --plr {} --clr {} --env-name {} --maxeplen {} --num-test {} --vwght \"{}\" --policy {} --nprims {} --tasks {} --nsamp {} --weight-entropy-coeff {}'.format(o, p, c, e, l, n, vw, pi, np, t, nsamp, we)
-    command += ' --for-transfer'
-    command += ' --multitask'
+    command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {}'.format(pi, np, t, we)
     command += ' --outputdir {}'.format(outputdir)
     command += ' --printf'
     command += ' &'
@@ -811,4 +845,3 @@ for o, p, c, e, l, n, vw, pi, np, t, we in itertools.product(optimizer, plr, clr
     # i += 1
     # if i >= num_gpus:
     #     i = 0
-
