@@ -59,6 +59,7 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
         e = copy.deepcopy(info)
         e.update({'reward_total': reward})
         if render:
+            # frame = env.render(mode='rgb_array', width=1600, height=900)
             frame = env.render(mode='rgb_array')
             e['frame'] = frame
             if env.env.multitask or env.env.multitask_for_transfer:

@@ -87,7 +87,7 @@ parser.add_argument('--debug', action='store_true',
                     help='debug')
 parser.add_argument('--printf', action='store_true',
                     help='printf')
-parser.add_argument('--fixed-std', type=float, default=0.2,
+parser.add_argument('--fixed-std', type=float, default=0.1,
                     help='fixed std')
 parser.add_argument('--vwght', type=str, default='0 0',
                     help='weight for xy: 1 0 is x vel forward, 0 -1 is y vel backward')
@@ -138,6 +138,7 @@ def build_expname(args, ext=''):
     expname += '_tt-{}'.format(args.tasks)
     expname += '_wef-{}'.format(args.weight_entropy_coeff)
     expname += '_klp-{}'.format(args.klp)
+    expname += '_s{}'.format(args.seed)
     expname += ext
     if args.debug: expname+= '_debug'
     return expname
