@@ -67,8 +67,8 @@
         </body>
       </body>
     </body>
-    <site name="goal" rgba="0 1 1 0.5" pos="0. 10. 0." size="0.5" />
-    <site name="origin" rgba="1 0 0 0.5" pos="0. 0. 0." size="0.1" />
+    <!-- <site name="goal" rgba="0 1 1 0.5" pos="0. 10. 0." size="0.5" /> -->
+    <!-- <site name="origin" rgba="1 0 0 0.5" pos="0. 0. 0." size="0.1" /> -->
   </worldbody>
   <actuator>
     <motor ctrllimited="true" ctrlrange="-1.0 1.0" joint="hip_4" gear="150"/>

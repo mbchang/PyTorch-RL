@@ -931,8 +931,7 @@ gpu = False
 num_gpus = 1
 i = 0
 
-if gpu:
-    os.system('export OMP_NUM_THREADS=1')
+os.system('export OMP_NUM_THREADS=1')
 
 for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
@@ -962,8 +961,7 @@ gpu = False
 num_gpus = 1
 i = 0
 
-if gpu:
-    os.system('export OMP_NUM_THREADS=1')
+os.system('export OMP_NUM_THREADS=1')
 
 for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''

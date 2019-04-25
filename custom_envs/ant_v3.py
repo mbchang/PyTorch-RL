@@ -6,7 +6,7 @@ from gym.envs.mujoco import mujoco_env
 
 
 DEFAULT_CAMERA_CONFIG = {
-    'distance': 4.0,
+    'distance': 10.0,
 }
 
 
@@ -171,9 +171,6 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
         x = np.concatenate((obs, goal))
         return x
 
-
-
-
     # def train_mode(self):
     #     combos = list(itertools.product([0, -1, 1], [0, -1, 1]))
     #     combos.remove((0,0))
@@ -193,7 +190,6 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     #         self.velocity_weight['y'] = vw[1]
     #     self.goal = np.array([self.velocity_weight['x'], self.velocity_weight['y']])
     #     return copy.deepcopy(self.goal)
-
 
     def construct_sampling_set(self, tasks):
         sampling_set = []
