@@ -3,8 +3,10 @@ import torch
 
 
 class Value(nn.Module):
-    def __init__(self, state_dim, hidden_size=(128, 128), activation='relu'):
+    def __init__(self, state_dim, obs_dim, hidden_size=(128, 128), activation='relu'):
         super().__init__()
+        self.state_dim = state_dim
+        self.obs_dim = obs_dim
         if activation == 'tanh':
             self.activation = torch.tanh
         elif activation == 'relu':
@@ -13,7 +15,7 @@ class Value(nn.Module):
             self.activation = torch.sigmoid
 
         self.affine_layers = nn.ModuleList()
-        last_dim = state_dim
+        last_dim = self.obs_dim
         for nh in hidden_size:
             self.affine_layers.append(nn.Linear(last_dim, nh))
             last_dim = nh
@@ -23,6 +25,7 @@ class Value(nn.Module):
         self.value_head.bias.data.mul_(0.0)
 
     def forward(self, x):
+        x = x[..., :self.obs_dim]
         for affine in self.affine_layers:
             x = self.activation(affine(x))
 

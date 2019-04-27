@@ -87,7 +87,7 @@ parser.add_argument('--debug', action='store_true',
                     help='debug')
 parser.add_argument('--printf', action='store_true',
                     help='printf')
-parser.add_argument('--fixed-std', type=float, default=0.1,
+parser.add_argument('--fixed-std', type=float, default=0.2,
                     help='fixed std')
 parser.add_argument('--vwght', type=str, default='0 0',
                     help='weight for xy: 1 0 is x vel forward, 0 -1 is y vel backward')
@@ -180,17 +180,17 @@ def initialize_actor_critic(env, device):
     if args.model_path is None:
         if is_disc_action:
             policy_net = DiscretePolicy(state_dim, action_dim)
-            value_net = Value(state_dim)
+            value_net = Value(state_dim=state_dim, obs_dim=state_dim)
         else:
             if args.policy == 'vanilla':
                 policy_net = Policy(state_dim, action_dim, log_std=args.log_std)
-                value_net = Value(state_dim)
+                value_net = Value(state_dim=state_dim, obs_dim=state_dim)
             elif args.policy == 'primitive':
                 goal_dim = env.env.goal_dim
                 hdim = 64 if args.debug else 128
                 encoder = Feedforward([state_dim+goal_dim, hdim], out_act=F.relu)
                 policy_net = PrimitivePolicy(encoder=encoder, bottleneck_dim=hdim, decoder_dims=[hdim, action_dim], device=device, id=0)
-                value_net = Value(state_dim+goal_dim)
+                value_net = Value(state_dim=state_dim+goal_dim, obs_dim=state_dim+goal_dim)
             elif args.policy == 'composite':
                 num_primitives = args.nprims
                 goal_dim = env.env.goal_dim
@@ -198,16 +198,16 @@ def initialize_actor_critic(env, device):
                 encoders = [Feedforward([state_dim, hdim], out_act=F.relu) for i in range(num_primitives)]
                 primitive_builder = lambda e, i: PrimitivePolicy(encoder=e, bottleneck_dim=hdim, decoder_dims=[hdim, action_dim], device=device, id=i)
                 weight_network_builder = WeightNetworkNoState if args.hide_state else WeightNetwork
-                weight_network = weight_network_builder(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[hdim], bottleneck_dim=hdim, decoder_dims=[hdim, num_primitives], device=device)
+                weight_network = weight_network_builder(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[hdim], bottleneck_dim=hdim, decoder_dims=[hdim, num_primitives], device=device, fixed_std=args.fixed_std)
                 policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e, i) for i, e in enumerate(encoders)]), obs_dim=state_dim, device=device) 
-                value_net = Value(state_dim+goal_dim)
+                value_net = Value(state_dim=state_dim+goal_dim, obs_dim=state_dim+goal_dim)
             elif args.policy == 'latent':
                 goal_dim = env.env.goal_dim
                 hdim = 64 if args.debug else 128
                 zdim = args.nprims
                 goal_embedder = GoalEmbedder(dims=[goal_dim, hdim, hdim, zdim], obs_dim=state_dim, device=device) # good
                 policy_net = LatentPolicy(goal_embedder=goal_embedder, network_dims=[state_dim+zdim, hdim, hdim], outdim=action_dim, obs_dim=state_dim, device=device)
-                value_net = Value(state_dim+goal_dim)
+                value_net = Value(state_dim=state_dim+goal_dim, obs_dim=state_dim+goal_dim)
             else:
                 False
     ######################################################
@@ -233,7 +233,7 @@ def reset_for_transfer(env, policy_net, value_net, device, args):
         hdim = 64 if args.debug else 128
         weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[hdim], bottleneck_dim=hdim, decoder_dims=[hdim, num_primitives], device=device, fixed_std=args.fixed_std)
         policy_net = CompositeTransferPolicy(weight_network=weight_network, primitives=policy_net.primitives, obs_dim=state_dim, device=device)
-        value_net = Value(state_dim+goal_dim)
+        value_net = Value(state_dim=state_dim+goal_dim, obs_dim=state_dim+goal_dim)
         policy_net.to(device)
         value_net.to(device)
     elif args.policy == 'primitive':
@@ -246,7 +246,7 @@ def reset_for_transfer(env, policy_net, value_net, device, args):
         zdim = args.nprims
         goal_embedder = GoalEmbedder(dims=[state_dim+goal_dim, hdim, hdim, zdim], obs_dim=state_dim, device=device, fixed_std=args.fixed_std, ignore_obs=False)
         policy_net = LatentTransferPolicy(goal_embedder=goal_embedder, decoder=policy_net.decoder, obs_dim=state_dim, device=device)
-        value_net = Value(state_dim+goal_dim)
+        value_net = Value(state_dim=state_dim+goal_dim, obs_dim=state_dim+goal_dim)
         policy_net.to(device)
         value_net.to(device)
     else:
