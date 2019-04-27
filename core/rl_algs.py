@@ -103,8 +103,6 @@ class PPO():
         log_probs = info['log_prob']
         entropy = info['entropy']
         kl = info['kl']
-        if 'weight_entropy' in info:
-            weight_entropy = info['weight_entropy']
 
         ratio = torch.exp(log_probs - fixed_log_probs)
         surr1 = ratio * advantages
@@ -112,9 +110,6 @@ class PPO():
         policy_surr = -torch.min(surr1, surr2).mean()  # mean over batch
         entropy_penalty = self.args.entropy_coeff * entropy.mean()  # mean over batch
         ib_penalty = self.args.klp * kl.mean()  # mean over batch
-
-        # action_penalty = self.args.action_penalty * 
-
         policy_loss = policy_surr + ib_penalty - entropy_penalty  # TODO: add regularization of action mean
 
         if 'weight_entropy' in info:
@@ -140,6 +135,7 @@ class PPO():
         log['policy_loss'] = policy_loss.item()
         if 'weight_entropy' in info:
             log['weight_entropy'] = weight_entropy.mean().item()
+        if 'weight_std' in info:
             log['weight_std'] = info['weight_std'].mean().item()
         return log
 
