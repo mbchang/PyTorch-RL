@@ -66,7 +66,7 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
         e.update({'reward_total': reward})
         if render:
             # frame = env.render(mode='rgb_array', width=1600, height=900)
-            frame = env.render(mode='rgb_array')
+            frame = env.render(mode='rgb_array', width=1000, height=600)
             e['frame'] = frame
             if env.env.multitask or env.env.multitask_for_transfer:
                 e['goal'] = env.env.goal

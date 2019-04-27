@@ -976,19 +976,54 @@ Running it again, but this time add a constant to the reward.
 #     #     i = 0
 
 
-"""
-4/25/19
+# """
+# 4/25/19
 
-Testing different wef
-hide state from weight network
+# Testing different wef
+# hide state from weight network
+
+# """
+# policy = ['composite']
+# nprims = [4]
+# tasks = ['123_4']
+# wef = [0.0002]
+# seeds = [0, 1, 2]
+# outputdir = 'runs/ant_workshop'
+
+# gpu = False
+# num_gpus = 1
+# i = 0
+
+# if gpu:
+#     os.system('export OMP_NUM_THREADS=1')
+
+# for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
+#     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+#     command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {}'.format(pi, np, t, we, s)
+#     command += ' --hide-state'
+#     command += ' --outputdir {}'.format(outputdir)
+#     command += ' --printf'
+#     command += ' &'
+#     print(prefix + command)
+#     # os.system(prefix + command)
+#     # i += 1
+#     # if i >= num_gpus:
+#     #     i = 0
+
 
 """
-policy = ['composite']
+4/27/19
+
+Have noise as part of the state
+Latent, Composite, 4 primitives
+
+"""
+policy = ['latent', 'composite']
 nprims = [4]
 tasks = ['123_4']
-wef = [0.0002]
+wef = [0]
 seeds = [0, 1, 2]
-outputdir = 'runs/ant_workshop'
+outputdir = 'runs/ant_workshop_noise/p4'
 
 gpu = False
 num_gpus = 1
@@ -1000,7 +1035,8 @@ if gpu:
 for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
     command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {}'.format(pi, np, t, we, s)
-    command += ' --hide-state'
+    if pi == 'composite':
+        command += ' --hide-state'
     command += ' --outputdir {}'.format(outputdir)
     command += ' --printf'
     command += ' &'
@@ -1009,4 +1045,5 @@ for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
     # i += 1
     # if i >= num_gpus:
     #     i = 0
+
 

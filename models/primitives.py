@@ -71,7 +71,7 @@ class WeightNetwork(GaussianPolicy):
         self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], device=device, custom_init=True, fixed_std=fixed_std)
 
     def forward(self, state):
-        x, g, noise = state[..., :self.state_dim], state[...,self.state_dim:-self.out_dim], state[...,-self.out_dim:]
+        x, g, noise = state[..., :self.state_dim], state[...,self.state_dim:self.state_dim+self.goal_dim], state[...,self.state_dim+self.goal_dim:]
         z, kl = self.bottleneck(self.state_trunk(x))
         goal_embedding = self.goal_trunk(g)
         h = torch.cat((z, goal_embedding), dim=1)
@@ -99,7 +99,7 @@ class WeightNetworkNoState(GaussianPolicy):
         self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], device=device, custom_init=True, fixed_std=fixed_std)
 
     def forward(self, state):
-        x, g, noise = state[..., :self.state_dim], state[...,self.state_dim:-self.out_dim], state[...,-self.out_dim:]
+        x, g, noise = state[..., :self.state_dim], state[...,self.state_dim:self.state_dim+self.goal_dim], state[...,self.state_dim+self.goal_dim:]
         z, kl = self.bottleneck(self.state_trunk(x))
         goal_embedding = self.goal_trunk(g)
         # h = torch.cat((z, goal_embedding), dim=1)
@@ -109,11 +109,12 @@ class WeightNetworkNoState(GaussianPolicy):
         return weights, std, kl, {'weight_std': std}
 
 class GoalEmbedder(GaussianPolicy):
-    def __init__(self, dims, obs_dim, device, fixed_std=None, ignore_obs=True):
+    def __init__(self, dims, obs_dim, goal_dim, device, fixed_std=None, ignore_obs=True):
         super(GoalEmbedder, self).__init__(device)
         assert len(dims) >= 3
         self.dims = dims
         self.obs_dim = obs_dim
+        self.goal_dim = goal_dim
         self.ignore_obs = ignore_obs
         self.network = Feedforward(dims=dims[:-2], out_act=F.relu)
         self.bottleneck = DeterministicBottleneck(self.dims[-3], self.dims[-2], device=device)
@@ -121,8 +122,12 @@ class GoalEmbedder(GaussianPolicy):
         self.out_dim = self.dims[-1]
 
     def forward(self, state):
-        obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:-self.out_dim], state[...,-self.out_dim:]
-        h = self.network(goal) if self.ignore_obs else self.network(state)
+        obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:self.obs_dim+self.goal_dim]
+        if self.ignore_obs:
+            h = self.network(goal)
+        else:
+            h = self.network(state)
+        # h = self.network(goal) if self.ignore_obs else self.network(state)
         z, kl = self.bottleneck(h)  # dummy kl
         mu, logstd = self.parameter_producer(z)
         return mu, torch.exp(logstd), kl, {}
@@ -186,7 +191,7 @@ class CompositePolicy(StochasticGaussianPolicy):
         return composite_mu, composite_std, kls
 
     def forward(self, state):
-        obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:-self.zdim], state[...,-self.zdim:]
+        obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:self.obs_dim+self.weight_network.goal_dim], state[...,self.obs_dim+self.weight_network.goal_dim:]
         bsize = state.size(0)
         weights, weights_std, weights_bottleneck_kl, weight_info = self.weight_network(state)
         weights, weights_kl, weight_dist = reparametrize(mu=weights, std=weights_std, noise=noise, device=self.get_device())
@@ -232,7 +237,7 @@ class LatentPolicy(StochasticGaussianPolicy):
         self.zdim = self.goal_embedder.out_dim
 
     def forward(self, state):
-        obs  = state[..., :self.obs_dim]
+        obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:self.obs_dim+self.goal_embedder.goal_dim], state[...,self.obs_dim+self.goal_embedder.goal_dim:]
         bsize = state.size(0)
         goal_mu, goal_std, goal_bottleneck_kl, goal_info = self.goal_embedder(state)
         goal_embedding, goal_embedding_kl, goal_embedding_dist = reparametrize(mu=goal_mu, std=goal_std, noise=noise, device=self.get_device())

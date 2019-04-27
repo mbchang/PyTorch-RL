@@ -205,7 +205,7 @@ def initialize_actor_critic(env, device):
                 goal_dim = env.env.goal_dim
                 hdim = 64 if args.debug else 128
                 zdim = args.nprims
-                goal_embedder = GoalEmbedder(dims=[goal_dim, hdim, hdim, zdim], obs_dim=state_dim, device=device) # good
+                goal_embedder = GoalEmbedder(dims=[goal_dim, hdim, hdim, zdim], obs_dim=state_dim, goal_dim=goal_dim, device=device) # good
                 policy_net = LatentPolicy(goal_embedder=goal_embedder, network_dims=[state_dim+zdim, hdim, hdim], outdim=action_dim, obs_dim=state_dim, device=device)
                 value_net = Value(state_dim=state_dim+goal_dim, obs_dim=state_dim+goal_dim)
             else:
@@ -244,7 +244,7 @@ def reset_for_transfer(env, policy_net, value_net, device, args):
         goal_dim = env.env.goal_dim
         hdim = 64 if args.debug else 128
         zdim = args.nprims
-        goal_embedder = GoalEmbedder(dims=[state_dim+goal_dim, hdim, hdim, zdim], obs_dim=state_dim, device=device, fixed_std=args.fixed_std, ignore_obs=False)
+        goal_embedder = GoalEmbedder(dims=[state_dim+goal_dim, hdim, hdim, zdim], obs_dim=state_dim, goal_dim=goal_dim, device=device, fixed_std=args.fixed_std, ignore_obs=False)
         policy_net = LatentTransferPolicy(goal_embedder=goal_embedder, decoder=policy_net.decoder, obs_dim=state_dim, device=device)
         value_net = Value(state_dim=state_dim+goal_dim, obs_dim=state_dim+goal_dim)
         policy_net.to(device)
