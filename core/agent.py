@@ -30,6 +30,12 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
     episode_data = []
 
     for t in range(maxeplen):
+        ############################
+        if policy.is_stochastic:
+            noise = np.random.normal(size=(policy.zdim))
+            state = np.concatenate((state, noise))
+        ############################
+
         state_var = tensor(state).unsqueeze(0)
         with torch.no_grad():
             action = policy.select_action(state_var, deterministic=mean_action)

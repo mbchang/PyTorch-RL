@@ -43,6 +43,16 @@ class GaussianPolicy(nn.Module):
         else:
             return torch.device('cpu')
 
+class StochasticGaussianPolicy(GaussianPolicy):
+    def __init__(self, device):
+        super(StochasticGaussianPolicy, self).__init__(device)
+        self.is_stochastic = True
+
+class DeterministicGaussianPolicy(GaussianPolicy):
+    def __init__(self, device):
+        super(DeterministicGaussianPolicy, self).__init__(device)
+        self.is_stochastic = False
+
 class WeightNetwork(GaussianPolicy):
     def __init__(self, state_dim, goal_dim, encoder_dims, bottleneck_dim, decoder_dims, device, vib=False, fixed_std=None):
         super(WeightNetwork, self).__init__(device)
@@ -51,6 +61,7 @@ class WeightNetwork(GaussianPolicy):
         self.encoder_dims = encoder_dims
         self.bottleneck_dim = bottleneck_dim
         self.decoder_dims = decoder_dims
+        self.out_dim = self.decoder_dims[-1]
 
         self.state_trunk = Feedforward([state_dim] + encoder_dims, out_act=F.relu)
         bottleneck = InformationBottleneck if vib else DeterministicBottleneck
@@ -60,14 +71,15 @@ class WeightNetwork(GaussianPolicy):
         self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], device=device, custom_init=True, fixed_std=fixed_std)
 
     def forward(self, state):
-        x, g = state[..., :self.state_dim], state[...,self.state_dim:]
+        # x, g = state[..., :self.state_dim], state[...,self.state_dim:]
+        x, g, noise = state[..., :self.state_dim], state[...,self.state_dim:-self.out_dim], state[...,-self.out_dim:]
         z, kl = self.bottleneck(self.state_trunk(x))
         goal_embedding = self.goal_trunk(g)
         h = torch.cat((z, goal_embedding), dim=1)
         h = self.decoder(h)
         weights, logstd = self.parameter_producer(h)
         std = torch.exp(logstd)  # this should around 0.2 or 0.3
-        return weights, std, kl, {}
+        return weights, std, kl, {'weight_std': std}
 
 class WeightNetworkNoState(GaussianPolicy):
     def __init__(self, state_dim, goal_dim, encoder_dims, bottleneck_dim, decoder_dims, device, vib=False, fixed_std=None):
@@ -77,6 +89,7 @@ class WeightNetworkNoState(GaussianPolicy):
         self.encoder_dims = encoder_dims
         self.bottleneck_dim = bottleneck_dim
         self.decoder_dims = decoder_dims
+        self.out_dim = self.decoder_dims[-1]
 
         self.state_trunk = Feedforward([state_dim] + encoder_dims, out_act=F.relu)
         bottleneck = InformationBottleneck if vib else DeterministicBottleneck
@@ -87,14 +100,15 @@ class WeightNetworkNoState(GaussianPolicy):
         self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], device=device, custom_init=True, fixed_std=fixed_std)
 
     def forward(self, state):
-        x, g = state[..., :self.state_dim], state[...,self.state_dim:]
+        # x, g = state[..., :self.state_dim], state[...,self.state_dim:]
+        x, g, noise = state[..., :self.state_dim], state[...,self.state_dim:-self.out_dim], state[...,-self.out_dim:]
         z, kl = self.bottleneck(self.state_trunk(x))
         goal_embedding = self.goal_trunk(g)
         # h = torch.cat((z, goal_embedding), dim=1)
         h = self.decoder(goal_embedding)
         weights, logstd = self.parameter_producer(h)
         std = torch.exp(logstd)  # this should around 0.2 or 0.3
-        return weights, std, kl, {}
+        return weights, std, kl, {'weight_std': std}
 
 class GoalEmbedder(GaussianPolicy):
     def __init__(self, dims, obs_dim, device, fixed_std=None, ignore_obs=True):
@@ -106,15 +120,17 @@ class GoalEmbedder(GaussianPolicy):
         self.network = Feedforward(dims=dims[:-2], out_act=F.relu)
         self.bottleneck = DeterministicBottleneck(self.dims[-3], self.dims[-2], device=device)
         self.parameter_producer = GaussianParams(self.dims[-2], self.dims[-1], device=device, custom_init=True, fixed_std=fixed_std)
+        self.out_dim = self.dims[-1]
 
     def forward(self, state):
-        obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        # obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:-self.out_dim], state[...,-self.out_dim:]
         h = self.network(goal) if self.ignore_obs else self.network(state)
         z, kl = self.bottleneck(h)  # dummy kl
         mu, logstd = self.parameter_producer(z)
         return mu, torch.exp(logstd), kl, {}
 
-class PrimitivePolicy(GaussianPolicy):
+class PrimitivePolicy(DeterministicGaussianPolicy):
     def __init__(self, encoder, bottleneck_dim, decoder_dims, device, id, fixed_std=None, vib=False):
         super(PrimitivePolicy, self).__init__(device)
         self.outdim = decoder_dims[-1]
@@ -132,7 +148,7 @@ class PrimitivePolicy(GaussianPolicy):
         mu, logstd = self.parameter_producer(h)
         return mu, torch.exp(logstd), kl, {}
 
-class CompositePolicy(GaussianPolicy):
+class CompositePolicy(StochasticGaussianPolicy):
     def __init__(self, weight_network, primitives, obs_dim, device, freeze_primitives=False):
         super(CompositePolicy, self).__init__(device)
         self.primitives = primitives
@@ -142,6 +158,7 @@ class CompositePolicy(GaussianPolicy):
         self.name = 'composite'
         self.obs_dim = obs_dim
         self.freeze_primitives = freeze_primitives
+        self.zdim = self.weight_network.out_dim
 
     def get_composite_mu(self, mus, weights_over_variance, inverse_variance):
         weighted_mus = weights_over_variance * mus
@@ -172,7 +189,8 @@ class CompositePolicy(GaussianPolicy):
         return composite_mu, composite_std, kls
 
     def forward(self, state):
-        obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        # obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:-self.zdim], state[...,-self.zdim:]
         bsize = state.size(0)
         weights, weights_std, weights_bottleneck_kl, weight_info = self.weight_network(state)
         weights, weights_kl, weight_dist = reparametrize(mu=weights, std=weights_std, device=self.get_device())
@@ -197,14 +215,15 @@ class CompositeTransferPolicy(CompositePolicy):
         return self.weight_network.get_log_prob(state, action)
 
     def post_process(self, state, weights):
-        obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        # obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:-self.zdim], state[...,-self.zdim:]
         bsize = state.size(0)
         weights = F.sigmoid(weights).view(bsize, self.k, 1)
         mus, stds, kls = self.execute_primitives(obs, no_grad=True)
         composite_mu, composite_std, kls = self.get_composite_parameters(mus, stds, kls, weights)
         return composite_mu
 
-class LatentPolicy(GaussianPolicy):
+class LatentPolicy(StochasticGaussianPolicy):
     def __init__(self, goal_embedder, network_dims, outdim, obs_dim, device):
         super(LatentPolicy, self).__init__(device)
         self.goal_embedder = goal_embedder
@@ -215,9 +234,11 @@ class LatentPolicy(GaussianPolicy):
         self.decoder = nn.Sequential(self.network, self.parameter_producer)
         self.obs_dim = obs_dim
         self.name = 'latent'
+        self.zdim = self.goal_embedder.out_dim
 
     def forward(self, state):
-        obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        # obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:-self.zdim], state[...,-self.zdim:]
         bsize = state.size(0)
         goal_mu, goal_std, goal_bottleneck_kl, goal_info = self.goal_embedder(state)
         goal_embedding, goal_embedding_kl, goal_embedding_dist = reparametrize(mu=goal_mu, std=goal_std, device=self.get_device())
@@ -226,13 +247,14 @@ class LatentPolicy(GaussianPolicy):
         mu, logstd = self.decoder(inp)
         return mu, torch.exp(logstd), goal_embedding_kl, {'goal_std': goal_std}
 
-class LatentTransferPolicy(GaussianPolicy):
+class LatentTransferPolicy(DeterministicGaussianPolicy):
     def __init__(self, goal_embedder, decoder, obs_dim, device):
         super(LatentTransferPolicy, self).__init__(device)
         self.goal_embedder = goal_embedder
         self.decoder = decoder
         self.obs_dim = obs_dim
         self.name = 'latent'
+        self.zdim = self.goal_embedder.out_dim
 
     def forward(self, state):
         goal_mu, goal_std, goal_bottleneck_kl = self.goal_embedder(state)
@@ -245,7 +267,8 @@ class LatentTransferPolicy(GaussianPolicy):
         return self.goal_embedder.get_log_prob(state, action)
 
     def post_process(self, state, goal_embedding):
-        obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        # obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
+        obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:-self.zdim], state[...,-self.zdim:]
         bsize = state.size(0)
         goal_embedding = F.sigmoid(goal_embedding)
         inp = torch.cat((obs, goal_embedding), dim=-1)
