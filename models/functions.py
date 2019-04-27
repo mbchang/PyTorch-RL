@@ -47,10 +47,11 @@ def kl_standard_normal(dist, device):
     kl = torch.distributions.kl.kl_divergence(p=dist, q=prior)
     return kl
 
-def reparametrize(mu, std, device):
+def reparametrize(mu, std, noise, device):
     bsize = mu.size(0)
     dist = MultivariateNormal(loc=mu, scale_tril=torch.diag_embed(std))
-    z = dist.rsample()
+    # z = dist.rsample() # do something else!
+    z = noise.mul(std).add_(mu)  # only works for spherical gaussian!
     kl = kl_standard_normal(dist, device).view(bsize, 1)
     return z, kl, dist
 

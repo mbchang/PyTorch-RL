@@ -71,7 +71,6 @@ class WeightNetwork(GaussianPolicy):
         self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], device=device, custom_init=True, fixed_std=fixed_std)
 
     def forward(self, state):
-        # x, g = state[..., :self.state_dim], state[...,self.state_dim:]
         x, g, noise = state[..., :self.state_dim], state[...,self.state_dim:-self.out_dim], state[...,-self.out_dim:]
         z, kl = self.bottleneck(self.state_trunk(x))
         goal_embedding = self.goal_trunk(g)
@@ -100,7 +99,6 @@ class WeightNetworkNoState(GaussianPolicy):
         self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], device=device, custom_init=True, fixed_std=fixed_std)
 
     def forward(self, state):
-        # x, g = state[..., :self.state_dim], state[...,self.state_dim:]
         x, g, noise = state[..., :self.state_dim], state[...,self.state_dim:-self.out_dim], state[...,-self.out_dim:]
         z, kl = self.bottleneck(self.state_trunk(x))
         goal_embedding = self.goal_trunk(g)
@@ -123,7 +121,6 @@ class GoalEmbedder(GaussianPolicy):
         self.out_dim = self.dims[-1]
 
     def forward(self, state):
-        # obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
         obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:-self.out_dim], state[...,-self.out_dim:]
         h = self.network(goal) if self.ignore_obs else self.network(state)
         z, kl = self.bottleneck(h)  # dummy kl
@@ -189,11 +186,10 @@ class CompositePolicy(StochasticGaussianPolicy):
         return composite_mu, composite_std, kls
 
     def forward(self, state):
-        # obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
         obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:-self.zdim], state[...,-self.zdim:]
         bsize = state.size(0)
         weights, weights_std, weights_bottleneck_kl, weight_info = self.weight_network(state)
-        weights, weights_kl, weight_dist = reparametrize(mu=weights, std=weights_std, device=self.get_device())
+        weights, weights_kl, weight_dist = reparametrize(mu=weights, std=weights_std, noise=noise, device=self.get_device())
         weight_entropy = weight_dist.entropy().view(bsize, 1)
         weights = F.sigmoid(weights).view(bsize, self.k, 1)
         mus, stds, kls = self.execute_primitives(obs, no_grad=self.freeze_primitives)
@@ -215,8 +211,7 @@ class CompositeTransferPolicy(CompositePolicy):
         return self.weight_network.get_log_prob(state, action)
 
     def post_process(self, state, weights):
-        # obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
-        obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:-self.zdim], state[...,-self.zdim:]
+        obs = state[..., :self.obs_dim]
         bsize = state.size(0)
         weights = F.sigmoid(weights).view(bsize, self.k, 1)
         mus, stds, kls = self.execute_primitives(obs, no_grad=True)
@@ -237,11 +232,10 @@ class LatentPolicy(StochasticGaussianPolicy):
         self.zdim = self.goal_embedder.out_dim
 
     def forward(self, state):
-        # obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
-        obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:-self.zdim], state[...,-self.zdim:]
+        obs  = state[..., :self.obs_dim]
         bsize = state.size(0)
         goal_mu, goal_std, goal_bottleneck_kl, goal_info = self.goal_embedder(state)
-        goal_embedding, goal_embedding_kl, goal_embedding_dist = reparametrize(mu=goal_mu, std=goal_std, device=self.get_device())
+        goal_embedding, goal_embedding_kl, goal_embedding_dist = reparametrize(mu=goal_mu, std=goal_std, noise=noise, device=self.get_device())
         goal_embedding = F.sigmoid(goal_embedding)
         inp = torch.cat((obs, goal_embedding), dim=-1)
         mu, logstd = self.decoder(inp)
@@ -267,8 +261,7 @@ class LatentTransferPolicy(DeterministicGaussianPolicy):
         return self.goal_embedder.get_log_prob(state, action)
 
     def post_process(self, state, goal_embedding):
-        # obs, goal = state[..., :self.obs_dim], state[...,self.obs_dim:]
-        obs, goal, noise = state[..., :self.obs_dim], state[...,self.obs_dim:-self.zdim], state[...,-self.zdim:]
+        obs  = state[..., :self.obs_dim]
         bsize = state.size(0)
         goal_embedding = F.sigmoid(goal_embedding)
         inp = torch.cat((obs, goal_embedding), dim=-1)
