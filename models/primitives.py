@@ -69,6 +69,33 @@ class WeightNetwork(GaussianPolicy):
         std = torch.exp(logstd)  # this should around 0.2 or 0.3
         return weights, std, kl, {}
 
+class WeightNetworkNoState(GaussianPolicy):
+    def __init__(self, state_dim, goal_dim, encoder_dims, bottleneck_dim, decoder_dims, device, vib=False, fixed_std=None):
+        super(WeightNetworkNoState, self).__init__(device)
+        self.state_dim = state_dim
+        self.goal_dim = goal_dim
+        self.encoder_dims = encoder_dims
+        self.bottleneck_dim = bottleneck_dim
+        self.decoder_dims = decoder_dims
+
+        self.state_trunk = Feedforward([state_dim] + encoder_dims, out_act=F.relu)
+        bottleneck = InformationBottleneck if vib else DeterministicBottleneck
+        self.bottleneck = bottleneck(encoder_dims[-1], bottleneck_dim, device=device)
+        self.goal_trunk = Feedforward([goal_dim] + encoder_dims + [bottleneck_dim])
+        self.decoder = Feedforward([bottleneck_dim, decoder_dims[0]])
+        # self.decoder = Feedforward([bottleneck_dim*2, decoder_dims[0]])
+        self.parameter_producer = GaussianParams(decoder_dims[0], decoder_dims[1], device=device, custom_init=True, fixed_std=fixed_std)
+
+    def forward(self, state):
+        x, g = state[..., :self.state_dim], state[...,self.state_dim:]
+        z, kl = self.bottleneck(self.state_trunk(x))
+        goal_embedding = self.goal_trunk(g)
+        # h = torch.cat((z, goal_embedding), dim=1)
+        h = self.decoder(goal_embedding)
+        weights, logstd = self.parameter_producer(h)
+        std = torch.exp(logstd)  # this should around 0.2 or 0.3
+        return weights, std, kl, {}
+
 class GoalEmbedder(GaussianPolicy):
     def __init__(self, dims, obs_dim, device, fixed_std=None, ignore_obs=True):
         super(GoalEmbedder, self).__init__(device)

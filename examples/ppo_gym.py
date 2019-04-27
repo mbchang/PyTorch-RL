@@ -18,7 +18,7 @@ from infra.env_config import *
 from models.mlp_policy import Policy
 from models.mlp_critic import Value
 from models.mlp_policy_disc import DiscretePolicy
-from models.primitives import Feedforward, CompositePolicy, WeightNetwork, PrimitivePolicy, CompositeTransferPolicy, GoalEmbedder, LatentPolicy, LatentTransferPolicy
+from models.primitives import Feedforward, CompositePolicy, WeightNetwork, PrimitivePolicy, CompositeTransferPolicy, GoalEmbedder, LatentPolicy, LatentTransferPolicy, WeightNetworkNoState
 from utils import *
 
 parser = argparse.ArgumentParser(description='PyTorch PPO example')
@@ -121,6 +121,8 @@ parser.add_argument('--tasks', type=str, default='1234_1234',
                     help='quadrants for training_testing (default: 1234_1234)')
 parser.add_argument('--nsamp', type=int, default=2, metavar='N',
                     help='number of times we sample from test (default: 1)')
+parser.add_argument('--hide-state', action='store_true',
+                    help='hide state in weight network')
 
 args = parser.parse_args()
 
@@ -139,6 +141,7 @@ def build_expname(args, ext=''):
     expname += '_wef-{}'.format(args.weight_entropy_coeff)
     expname += '_klp-{}'.format(args.klp)
     expname += '_s{}'.format(args.seed)
+    if args.hide_state: expname += '_hs'
     expname += ext
     if args.debug: expname+= '_debug'
     return expname
@@ -194,7 +197,8 @@ def initialize_actor_critic(env, device):
                 hdim = 64 if args.debug else 128
                 encoders = [Feedforward([state_dim, hdim], out_act=F.relu) for i in range(num_primitives)]
                 primitive_builder = lambda e, i: PrimitivePolicy(encoder=e, bottleneck_dim=hdim, decoder_dims=[hdim, action_dim], device=device, id=i)
-                weight_network = WeightNetwork(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[hdim], bottleneck_dim=hdim, decoder_dims=[hdim, num_primitives], device=device)
+                weight_network_builder = WeightNetworkNoState if args.hide_state else WeightNetwork
+                weight_network = weight_network_builder(state_dim=state_dim, goal_dim=goal_dim, encoder_dims=[hdim], bottleneck_dim=hdim, decoder_dims=[hdim, num_primitives], device=device)
                 policy_net = CompositePolicy(weight_network=weight_network, primitives=nn.ModuleList([primitive_builder(e, i) for i, e in enumerate(encoders)]), obs_dim=state_dim, device=device) 
                 value_net = Value(state_dim+goal_dim)
             elif args.policy == 'latent':
