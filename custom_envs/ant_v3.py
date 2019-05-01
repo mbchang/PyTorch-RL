@@ -203,6 +203,18 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
             sampling_set.append([240, 360])
         return sampling_set
 
+    # def construct_sampling_set(self, tasks):
+    #     sampling_set = []
+    #     if 1 in tasks:
+    #         sampling_set.append([30, 90])  # train
+    #     if 2 in tasks:
+    #         sampling_set.append([-90, -30])  # train
+    #     if 3 in tasks:
+    #         sampling_set.append([-15, 15])  # interpolation
+    #     if 4 in tasks:
+    #         sampling_set.append([165, 195])  # extrapolation
+    #     return sampling_set
+
     def train_mode(self):
         self.sampling_set = self.construct_sampling_set(self.train_tasks)
 

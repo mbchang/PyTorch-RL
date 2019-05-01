@@ -191,16 +191,28 @@ class AntEnv(mujoco_env.MujocoEnv, utils.EzPickle):
     #     self.goal = np.array([self.velocity_weight['x'], self.velocity_weight['y']])
     #     return copy.deepcopy(self.goal)
 
+    # def construct_sampling_set(self, tasks):
+    #     sampling_set = []
+    #     if 1 in tasks:
+    #         sampling_set.append([0, 90])
+    #     if 2 in tasks:
+    #         sampling_set.append([90, 180])
+    #     if 3 in tasks:
+    #         sampling_set.append([180, 240])
+    #     if 4 in tasks:
+    #         sampling_set.append([240, 360])
+    #     return sampling_set
+
     def construct_sampling_set(self, tasks):
         sampling_set = []
         if 1 in tasks:
-            sampling_set.append([0, 90])
+            sampling_set.append([30, 90])  # train
         if 2 in tasks:
-            sampling_set.append([90, 180])
+            sampling_set.append([-90, -30])  # train
         if 3 in tasks:
-            sampling_set.append([180, 240])
+            sampling_set.append([-15, 15])  # interpolation
         if 4 in tasks:
-            sampling_set.append([240, 360])
+            sampling_set.append([165, 195])  # extrapolation
         return sampling_set
 
     def train_mode(self):
