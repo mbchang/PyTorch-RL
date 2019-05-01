@@ -111,7 +111,6 @@ parser.add_argument('--multitask', action='store_true', default=True,
                     help='multitask')
 parser.add_argument('--multitask-for-transfer', action='store_true',
                     help='multitask for transfer')
-
 parser.add_argument('--nprims', type=int, default=1, metavar='N',
                     help='number of primitives (default: 1)')
 parser.add_argument('--for-transfer', action='store_true', default=True,
@@ -125,6 +124,8 @@ parser.add_argument('--hide-state', action='store_true',
                     help='hide state in weight network')
 
 args = parser.parse_args()
+
+HACKY_LOAD = False
 
 dtype = torch.float64
 torch.set_default_dtype(dtype)
@@ -213,13 +214,20 @@ def initialize_actor_critic(env, device):
     ######################################################
     # TODO verify that this works
     # TODO: make this separate
+
+    ################################################
+    if HACKY_LOAD:
+        args.resume = '/Users/michaelchang/Documents/Researchlink/Berkeley/rlkit/PyTorch-RL/remote_runs/sophia/env-Ant-v3_p-primitive_np-4_tt-4_4_wef-0.0005_klp-0.0002_s2/env-Ant-v3_p-primitive_np-4_tt-4_4_wef-0.0005_klp-0.0002_s2_iter5e+03_bestrunning_avg_reward_train.pth.tar'
+    ################################################
+
     if args.resume:
-        policy_net, value_net, running_state = pickle.load(open(args.model_path, "rb"))
+        # policy_net, value_net, running_state = pickle.load(open(args.model_path, "rb"))
         # TODO: load from checkpoint
         ckpt = torch.load(args.resume)
         policy_net.load_state_dict(ckpt['policy'])
         value_net.load_state_dict(ckpt['valuefn'])
         running_state = ckpt['running_state']
+        args.resume = ''
     #######################################################
     policy_net.to(device)
     value_net.to(device)
@@ -274,7 +282,17 @@ def initialize_experiment(env, policy_net, value_net, device, args, running_stat
 def run_experiment(agent, env, logger, device, dtype, running_state, args):
     rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
     exp = Experiment(agent, env, rl_alg, logger, running_state, args)
-    exp.main_loop()
+    ################################################
+    # exp.main_loop()
+    # ################################################
+    if HACKY_LOAD:
+        trajectories = exp.execute_stochastic(100)
+        print(max(sum(trajectories[i]['reward']) for i in range(len(trajectories))))
+        pickle.dump(trajectories, open('4_4.p', 'wb'))
+        assert False
+    else:
+        exp.main_loop()
+    # ################################################
 
 def main(args):
     setup_experiment(args)

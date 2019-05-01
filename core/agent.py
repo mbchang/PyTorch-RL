@@ -8,14 +8,13 @@ import torch.optim as optim
 import copy
 
 # This thing should just take in a policy and environment and just run it.
-def sample_single_trajectory(env, policy, custom_reward, mean_action, render, running_state, maxeplen, memory, hide_goal):
+def sample_single_trajectory(env, policy, custom_reward, mean_action, render, running_state, maxeplen, memory, hide_goal, augmented=False):
 
     ######################################################
     # if render:
     #     goal = env.sample_goal_for_rollout()
     #     env.set_goal(goal)
-    ######################################################
-    
+    ######################################################    
     state = env.reset()
     ############################
     if not hide_goal:
@@ -39,6 +38,8 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
         state_var = tensor(state).unsqueeze(0)
         with torch.no_grad():
             action = policy.select_action(state_var, deterministic=mean_action)
+            if augmented:
+                logprob = policy.get_log_prob(state_var, action)['log_prob']
         env_action = policy.post_process(state_var, action)[0].numpy()  # but why doesn't it work if I do torch no grad in the post_process step of CompositeTransferPolicy?
         env_action = int(env_action) if policy.is_disc_action else env_action.astype(np.float64)
         next_state, reward, done, info = env.step(env_action)
@@ -60,7 +61,10 @@ def sample_single_trajectory(env, policy, custom_reward, mean_action, render, ru
 
         mask = 0 if done else 1
 
-        memory.push(state, action[0].numpy(), mask, next_state, reward)
+        if augmented:
+            memory.push(state, action[0].numpy(), logprob.item(), mask, next_state, reward, done)
+        else:
+            memory.push(state, action[0].numpy(), mask, next_state, reward)
 
         e = copy.deepcopy(info)
         e.update({'reward_total': reward})
@@ -218,3 +222,23 @@ class Agent:
         log['action_min'] = np.min(np.vstack(batch.action), axis=0)
         log['action_max'] = np.max(np.vstack(batch.action), axis=0)
         return batch, log
+
+    def sample_trajectories(self, policy, num_trajectories, deterministic=False, render=False, hide_goal=False):
+        trajectories = []
+        for i in range(num_trajectories):
+            memory = Memory(transition='augmented_transition')
+            sample_single_trajectory(self.env, policy, None, deterministic, render, None, self.args.maxeplen, memory, hide_goal, augmented=True)
+            sample = memory.sample()
+            trajectory_data = {
+                'state': sample.state,
+                'action': sample.action,
+                'logprob': sample.logprob,
+                'mask': sample.mask,
+                'next_state': sample.next_state,
+                'reward': sample.reward,
+                'done': sample.done
+            }
+            trajectories.append(trajectory_data)
+        return trajectories
+
+

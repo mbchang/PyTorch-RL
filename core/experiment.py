@@ -52,12 +52,12 @@ class Experiment():
                     open(os.path.join(assets_dir(), 'learned_models/{}_ppo.p'.format(self.args.env_name)), 'wb'))
         to_device(self.agent.device, self.agent.policy, self.agent.valuefn)
 
-    def test(self, policy, i_iter, hide_goal, sample_num=0):
+    def test(self, policy, i_iter, hide_goal, sample_num=0, num_test=10):
         to_device(torch.device('cpu'), policy)
         with torch.no_grad():
             test_batch, test_log = self.agent.collect_samples(
                 policy=policy,
-                min_batch_size=10, 
+                min_batch_size=num_test, 
                 deterministic=True, 
                 render=True,
                 hide_goal=hide_goal)
@@ -67,6 +67,7 @@ class Experiment():
         i_iter, sample_num, test_log['sample_time'], test_log['min_reward'], test_log['max_reward'], test_log['avg_reward']))
         to_device(self.agent.device, policy)
         self.visualize(policy_name=policy.name, i_episode=i_iter, episode_data=best_episode_data, mode='test', sample_num=sample_num)
+        return test_log
 
     def log(self, log, i_iter, policy_name):
         best_episode_data = log['best_episode_data']
@@ -78,6 +79,15 @@ class Experiment():
         self.logger.printf('Worst Episode Data: {}'.format(policy_name))
         self.logger.printf(display_stats(worst_merged_episode_data))
         return best_episode_data
+
+    def execute_stochastic(self, num_trajectories):
+        trajectories = self.agent.sample_trajectories(
+            policy=self.agent.policy,
+            num_trajectories=num_trajectories, 
+            deterministic=False, 
+            render=False,
+            hide_goal=False)
+        return trajectories
 
     def main_loop(self):
         for i_iter in range(self.args.max_iter_num+1):
