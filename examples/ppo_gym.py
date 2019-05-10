@@ -113,8 +113,10 @@ parser.add_argument('--multitask-for-transfer', action='store_true',
                     help='multitask for transfer')
 parser.add_argument('--nprims', type=int, default=1, metavar='N',
                     help='number of primitives (default: 1)')
-parser.add_argument('--for-transfer', action='store_true', default=True,
+parser.add_argument('--for-transfer', action='store_true',
                     help='multitask for transfer')
+parser.add_argument('--eval', action='store_true',
+                    help='eval mode')
 
 parser.add_argument('--tasks', type=str, default='1234_1234',
                     help='quadrants for training_testing (default: 1234_1234)')
@@ -124,8 +126,6 @@ parser.add_argument('--hide-state', action='store_true',
                     help='hide state in weight network')
 
 args = parser.parse_args()
-
-HACKY_LOAD = False
 
 dtype = torch.float64
 torch.set_default_dtype(dtype)
@@ -211,18 +211,13 @@ def initialize_actor_critic(env, device):
                 value_net = Value(state_dim=state_dim+goal_dim, obs_dim=state_dim+goal_dim)
             else:
                 False
-    ######################################################
-    # TODO verify that this works
-    # TODO: make this separate
-
     ################################################
-    if HACKY_LOAD:
-        args.resume = '/Users/michaelchang/Documents/Researchlink/Berkeley/rlkit/PyTorch-RL/remote_runs/sophia/env-Ant-v3_p-primitive_np-4_tt-4_4_wef-0.0005_klp-0.0002_s2/env-Ant-v3_p-primitive_np-4_tt-4_4_wef-0.0005_klp-0.0002_s2_iter5e+03_bestrunning_avg_reward_train.pth.tar'
+    if args.eval:
+        # args.resume = '/Users/michaelchang/Documents/Researchlink/Berkeley/rlkit/PyTorch-RL/remote_runs/sophia/env-Ant-v3_p-primitive_np-4_tt-4_4_wef-0.0005_klp-0.0002_s2/env-Ant-v3_p-primitive_np-4_tt-4_4_wef-0.0005_klp-0.0002_s2_iter5e+03_bestrunning_avg_reward_train.pth.tar'
+        args.resume = '/Users/michaelchang/Documents/Researchlink/Berkeley/rlkit/PyTorch-RL/runs/env-Ant-v3_p-primitive_np-2_tt-4_4_wef-0.001_klp-0.0002_s1_debug/env-Ant-v3_p-primitive_np-2_tt-4_4_wef-0.001_klp-0.0002_s1_debug_iter2e+00_bestrunning_avg_reward_train.pth.tar'
     ################################################
 
     if args.resume:
-        # policy_net, value_net, running_state = pickle.load(open(args.model_path, "rb"))
-        # TODO: load from checkpoint
         ckpt = torch.load(args.resume)
         policy_net.load_state_dict(ckpt['policy'])
         value_net.load_state_dict(ckpt['valuefn'])
@@ -282,25 +277,16 @@ def initialize_experiment(env, policy_net, value_net, device, args, running_stat
 def run_experiment(agent, env, logger, device, dtype, running_state, args):
     rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
     exp = Experiment(agent, env, rl_alg, logger, running_state, args)
-    ################################################
-    # exp.main_loop()
-    # ################################################
-    if HACKY_LOAD:
+    if args.eval:
         trajectories = exp.execute_stochastic(100)
         print(max(sum(trajectories[i]['reward']) for i in range(len(trajectories))))
         pickle.dump(trajectories, open('4_4.p', 'wb'))
-        assert False
     else:
         exp.main_loop()
-    # ################################################
 
 def main(args):
-    setup_experiment(args)
-    if args.running_state:
-        running_state = ZFilter((state_dim,), clip=5)
-    else:
-        running_state = None
-    # running_reward = ZFilter((1,), demean=False, clip=10)
+    running_state = ZFilter((state_dim,), clip=5) if args.running_state else None
+    env = setup_experiment(args)
     policy_net, value_net = initialize_actor_critic(env, device)
     env.env.train_mode()
     agent, logger = initialize_experiment(env, policy_net, value_net, device, args, running_state)

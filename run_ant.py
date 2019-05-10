@@ -837,6 +837,7 @@ Running it again, but this time add a constant to the reward.
 # for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 #     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
 #     command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {}'.format(pi, np, t, we, s)
+#     command += ' --for-transfer'
 #     command += ' --outputdir {}'.format(outputdir)
 #     command += ' --printf'
 #     command += ' &'
@@ -872,6 +873,7 @@ Running it again, but this time add a constant to the reward.
 # for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 #     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
 #     command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {}'.format(pi, np, t, we, s)
+#     command += ' --for-transfer'
 #     command += ' --outputdir {}'.format(outputdir)
 #     command += ' --printf'
 #     command += ' &'
@@ -882,38 +884,39 @@ Running it again, but this time add a constant to the reward.
 #     #     i = 0
 
 
-"""
-# # 4/23/19
+# """
+# # # 4/23/19
 
-Testing different wef for primitive
+# Testing different wef for primitive
 
-"""
-policy = ['primitive']
-nprims = [4]
-tasks = ['4_4']
-wef = [0.0005]
-# seeds = [0, 1, 2]
-seeds = [1, 3]
-outputdir = 'runs/ant_workshop'
+# """
+# policy = ['primitive']
+# nprims = [4]
+# tasks = ['4_4']
+# wef = [0.0005]
+# # seeds = [0, 1, 2]
+# seeds = [1, 3]
+# outputdir = 'runs/ant_workshop'
 
-gpu = True
-num_gpus = 1
-i = 0
+# gpu = True
+# num_gpus = 1
+# i = 0
 
-if gpu:
-    os.system('export OMP_NUM_THREADS=1')
+# if gpu:
+#     os.system('export OMP_NUM_THREADS=1')
 
-for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
-    prefix = ''#'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
-    command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {}'.format(pi, np, t, we, s)
-    command += ' --outputdir {}'.format(outputdir)
-    command += ' --printf'
-    command += ' &'
-    print(prefix + command)
-    # os.system(prefix + command)
-    # i += 1
-    # if i >= num_gpus:
-    #     i = 0
+# for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
+#     prefix = ''#'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+#     command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {}'.format(pi, np, t, we, s)
+#     command += ' --for-transfer'
+#     command += ' --outputdir {}'.format(outputdir)
+#     command += ' --printf'
+#     command += ' &'
+#     print(prefix + command)
+#     # os.system(prefix + command)
+#     # i += 1
+#     # if i >= num_gpus:
+#     #     i = 0
 
 
 
@@ -937,6 +940,7 @@ for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 # for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 #     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
 #     command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {}'.format(pi, np, t, we, s)
+#     command += ' --for-transfer'
 #     command += ' --outputdir {}'.format(outputdir)
 #     command += ' --printf'
 #     command += ' &'
@@ -967,6 +971,7 @@ for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 # for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 #     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
 #     command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {}'.format(pi, np, t, we, s)
+#     command += ' --for-transfer'
 #     command += ' --outputdir {}'.format(outputdir)
 #     command += ' --printf'
 #     command += ' &'
@@ -1002,6 +1007,7 @@ for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 #     prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
 #     command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {}'.format(pi, np, t, we, s)
 #     command += ' --hide-state'
+#     command += ' --for-transfer'
 #     command += ' --outputdir {}'.format(outputdir)
 #     command += ' --printf'
 #     command += ' &'
@@ -1038,6 +1044,7 @@ for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 #     command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {}'.format(pi, np, t, we, s)
 #     if pi == 'composite':
 #         command += ' --hide-state'
+#     command += ' --for-transfer'
 #     command += ' --outputdir {}'.format(outputdir)
 #     command += ' --printf'
 #     command += ' &'
@@ -1078,6 +1085,7 @@ for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 #     command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {} --max-iter-num {}'.format(pi, np, t, we, s, max_iter_num)
 #     if pi == 'composite':
 #         command += ' --hide-state'
+#     command += ' --for-transfer'
 #     command += ' --outputdir {}'.format(outputdir)
 #     command += ' --printf'
 #     command += ' &'
@@ -1113,6 +1121,7 @@ for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 # for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 #     prefix = ''#'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
 #     command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {} --max-iter-num {}'.format(pi, np, t, we, s, max_iter_num)
+#     command += ' --for-transfer'
 #     command += ' --outputdir {}'.format(outputdir)
 #     command += ' --printf'
 #     command += ' &'
@@ -1155,6 +1164,7 @@ for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 #     command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {} --max-iter-num {}'.format(pi, np, t, we, s, max_iter_num)
 #     if pi == 'composite':
 #         command += ' --hide-state'
+#     command += ' --for-transfer'
 #     command += ' --outputdir {}'.format(outputdir)
 #     command += ' --printf'
 #     command += ' &'
@@ -1191,6 +1201,7 @@ for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 # for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 #     prefix = ''#'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
 #     command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {} --max-iter-num {}'.format(pi, np, t, we, s, max_iter_num)
+#     command += ' --for-transfer'
 #     command += ' --outputdir {}'.format(outputdir)
 #     command += ' --printf'
 #     command += ' &'
@@ -1200,3 +1211,84 @@ for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
 #     # if i >= num_gpus:
 #     #     i = 0
 
+
+
+
+"""
+5/5/19
+
+Have noise as part of the state
+Latent, Composite, 4 primitives
+train for a long time
+
+"""
+policy = ['primitive', 'latent', 'composite']
+nprims = [4]
+tasks = ['123_4']
+wef = [0]
+seeds = [0, 1, 2]
+outputdir = 'runs/ant_workshop_xlong'
+max_iter_num = 20000
+
+gpu = False
+num_gpus = 1
+i = 0
+
+if gpu:
+    os.system('export OMP_NUM_THREADS=1')
+
+for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
+    prefix = 'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+    command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {} --max-iter-num {}'.format(pi, np, t, we, s, max_iter_num)
+    if pi == 'composite':
+        command += ' --hide-state'
+    command += ' --for-transfer'
+    command += ' --outputdir {}'.format(outputdir)
+    command += ' --printf'
+    command += ' &'
+    print(prefix + command)
+    # os.system(prefix + command)
+    # i += 1
+    # if i >= num_gpus:
+    #     i = 0
+
+
+"""
+5/5/19
+
+From scratch
+Train for a long time
+
+"""
+policy = ['primitive']
+nprims = [4]
+tasks = ['4_4']
+wef = [0]
+seeds = [0, 1, 2]
+outputdir = 'runs/ant_workshop_xlong'
+max_iter_num = 20000
+
+gpu = False
+num_gpus = 1
+i = 0
+
+if gpu:
+    os.system('export OMP_NUM_THREADS=1')
+
+for pi, np, t, we, s in itertools.product(policy, nprims, tasks, wef, seeds):
+    prefix = ''#'CUDA_VISIBLE_DEVICES={} '.format(i) if gpu else ''
+    command = 'python examples/ppo_gym.py --policy {} --nprims {} --tasks {} --weight-entropy-coeff {} --seed {} --max-iter-num {}'.format(pi, np, t, we, s, max_iter_num)
+    command += ' --for-transfer'
+    command += ' --outputdir {}'.format(outputdir)
+    command += ' --printf'
+    command += ' &'
+    print(prefix + command)
+    # os.system(prefix + command)
+    # i += 1
+    # if i >= num_gpus:
+    #     i = 0
+
+
+
+
+# TODO: you need to set for_transfer to be true!
