@@ -8,13 +8,7 @@ import torch.optim as optim
 import copy
 
 # This thing should just take in a policy and environment and just run it.
-def sample_single_trajectory(env, policy, custom_reward, mean_action, render, running_state, maxeplen, memory, hide_goal, augmented=False):
-
-    ######################################################
-    # if render:
-    #     goal = env.sample_goal_for_rollout()
-    #     env.set_goal(goal)
-    ######################################################    
+def sample_single_trajectory(env, policy, custom_reward, mean_action, render, running_state, maxeplen, memory, hide_goal, augmented=False):  
     state = env.reset()
     ############################
     if not hide_goal:
