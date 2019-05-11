@@ -278,11 +278,15 @@ def run_experiment(agent, env, logger, device, dtype, running_state, args):
     rl_alg = PPO(agent=agent, args=args, dtype=dtype, device=device)
     exp = Experiment(agent, env, rl_alg, logger, running_state, args)
     if args.eval:
-        trajectories = exp.execute_stochastic(100)
-        print(max(sum(trajectories[i]['reward']) for i in range(len(trajectories))))
-        pickle.dump(trajectories, open('4_4.p', 'wb'))
+        evaluate(exp)
     else:
         exp.main_loop()
+
+def evaluate(exp):
+    trajectories = exp.execute_stochastic(100)
+    print(max(sum(trajectories[i]['reward']) for i in range(len(trajectories))))
+    pickle.dump(trajectories, open('4_4.p', 'wb'))
+    # now instead of a pickle we will have a text file.
 
 def main(args):
     running_state = ZFilter((state_dim,), clip=5) if args.running_state else None

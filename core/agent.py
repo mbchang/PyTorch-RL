@@ -3,6 +3,7 @@ from utils.replay_memory import Memory
 from utils.torch import *
 import math
 import time
+from tqdm import tqdm
 
 import torch.optim as optim
 import copy
@@ -219,7 +220,7 @@ class Agent:
 
     def sample_trajectories(self, policy, num_trajectories, deterministic=False, render=False, hide_goal=False):
         trajectories = []
-        for i in range(num_trajectories):
+        for i in tqdm(range(num_trajectories)):
             memory = Memory(transition='augmented_transition')
             sample_single_trajectory(self.env, policy, None, deterministic, render, None, self.args.maxeplen, memory, hide_goal, augmented=True)
             sample = memory.sample()
