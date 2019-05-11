@@ -218,15 +218,19 @@ def initialize_actor_critic(env, device):
     ################################################
 
     if args.resume:
-        ckpt = torch.load(args.resume)
-        policy_net.load_state_dict(ckpt['policy'])
-        value_net.load_state_dict(ckpt['valuefn'])
-        running_state = ckpt['running_state']
-        args.resume = ''
+        policy_net, value_net, running_state = handle_resume(policy_net, value_net, args)
     #######################################################
     policy_net.to(device)
     value_net.to(device)
     return policy_net, value_net
+
+def handle_resume(policy_net, value_net, args):
+    ckpt = torch.load(args.resume)
+    policy_net.load_state_dict(ckpt['policy'])
+    value_net.load_state_dict(ckpt['valuefn'])
+    running_state = ckpt['running_state']
+    args.resume = ''
+    return policy_net, value_net, running_state
 
 def reset_for_transfer(env, policy_net, value_net, device, args):
     if args.policy == 'composite':
